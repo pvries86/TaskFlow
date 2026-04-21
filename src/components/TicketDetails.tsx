@@ -8,6 +8,7 @@ import {
   createComment,
   deleteAttachment,
   deleteComment,
+  deleteTicket,
   importEmail,
   listComments,
   updateComment,
@@ -30,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea';
 interface TicketDetailsProps {
   ticket: Ticket;
   onClose: () => void;
+  onTicketDeleted?: (ticketId: string) => void;
 }
 
 function toDateTimeInputValue(value?: { toDate?: () => Date } | null) {
@@ -43,7 +45,50 @@ function toDateTimeInputValue(value?: { toDate?: () => Date } | null) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
+function getDeadlineTone(ticket: Ticket) {
+  const deadline = ticket.deadline?.toDate ? ticket.deadline.toDate() : null;
+  if (!deadline) {
+    return { label: 'Open Ended', classes: 'border-slate-200 bg-slate-50 text-slate-500' };
+  }
+
+  const now = new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const weekEnd = new Date(today);
+  const day = today.getDay();
+  weekEnd.setDate(today.getDate() + ((7 - day) % 7) + 1);
+
+  if (deadline < now) {
+    return { label: 'Overdue', classes: 'border-red-200 bg-red-50 text-red-700' };
+  }
+  if (deadline >= today && deadline < tomorrow) {
+    return { label: 'Due Today', classes: 'border-amber-200 bg-amber-50 text-amber-700' };
+  }
+  if (deadline >= today && deadline < weekEnd) {
+    return { label: 'This Week', classes: 'border-sky-200 bg-sky-50 text-sky-700' };
+  }
+  return { label: 'Scheduled', classes: 'border-slate-200 bg-slate-50 text-slate-600' };
+}
+
+function parseEmailStyleDescription(description: string) {
+  const normalized = description.replace(/\r\n/g, '\n');
+  const match = normalized.match(
+    /^Subject:\s*(.+)\nFrom:\s*(.+)\nSent:\s*(.+?)(?:\n\n([\s\S]*))?$/i,
+  );
+
+  if (!match) return null;
+
+  return {
+    subject: match[1].trim(),
+    from: match[2].trim(),
+    sent: match[3].trim(),
+    body: (match[4] || '').trim(),
+  };
+}
+
+export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: TicketDetailsProps) {
   const { agents } = useAgents();
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentOrder, setCommentOrder] = useState<'desc' | 'asc'>('desc');
@@ -61,6 +106,7 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [deletingAttachmentUrl, setDeletingAttachmentUrl] = useState<string | null>(null);
+  const [deletingTicket, setDeletingTicket] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +166,11 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
   const savedDeadlineValue = useMemo(() => toDateTimeInputValue(ticket.deadline), [ticket.deadline]);
   const deadlineChanged = deadlineValue !== savedDeadlineValue;
   const hasDeadline = Boolean(ticket.deadline?.toDate);
+  const deadlineTone = useMemo(() => getDeadlineTone(ticket), [ticket]);
+  const descriptionEmail = useMemo(
+    () => parseEmailStyleDescription(ticket.description || ''),
+    [ticket.description],
+  );
 
   useEffect(() => {
     setDeadlineValue(savedDeadlineValue);
@@ -351,6 +402,24 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
     }
   };
 
+  const removeTicket = async () => {
+    const confirmed = window.confirm(`Delete ticket "${ticket.title}"? This removes its updates and attachments too.`);
+    if (!confirmed) return;
+
+    setDeletingTicket(true);
+    try {
+      await deleteTicket(ticket.id);
+      toast.success('Ticket deleted');
+      onTicketDeleted?.(ticket.id);
+      onClose();
+    } catch (error: any) {
+      console.error('Failed to delete ticket', error);
+      toast.error(error?.message || 'Failed to delete ticket');
+    } finally {
+      setDeletingTicket(false);
+    }
+  };
+
   const renderAttachmentChip = (attachment: Attachment) => (
     <div key={attachment.url} className="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded text-[10px] border">
       <button
@@ -366,7 +435,7 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
         className="text-red-500 hover:text-red-700"
         disabled={deletingAttachmentUrl === attachment.url}
       >
-        {deletingAttachmentUrl === attachment.url ? '…' : '×'}
+        {deletingAttachmentUrl === attachment.url ? '...' : 'x'}
       </button>
     </div>
   );
@@ -411,6 +480,15 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
           }`}>
             {ticket.status.replace('_', ' ')}
           </Badge>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-[18px] border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+            onClick={removeTicket}
+            disabled={deletingTicket}
+          >
+            {deletingTicket ? 'Deleting...' : 'Delete Ticket'}
+          </Button>
         </div>
       </div>
 
@@ -432,9 +510,9 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
                   </div>
                   <Badge
                     variant="outline"
-                    className={`shrink-0 ${hasDeadline ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}
+                    className={`shrink-0 ${deadlineTone.classes}`}
                   >
-                    {hasDeadline ? 'Scheduled' : 'Open Ended'}
+                    {deadlineTone.label}
                   </Badge>
                 </div>
                 <input
@@ -502,9 +580,26 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
 
           <section>
             <h4 className="text-[10px] font-bold uppercase tracking-widest text-text-light mb-3">Description</h4>
-            <div className="text-sm text-text-dark leading-relaxed whitespace-pre-wrap">
-              {ticket.description}
-            </div>
+            {descriptionEmail ? (
+              <div className="rounded-lg border border-blue-100 bg-blue-50/70">
+                <div className="border-b border-blue-100 px-4 py-3">
+                  <div className="text-sm font-semibold text-text-dark">{descriptionEmail.subject}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-light">
+                    <span><span className="font-semibold text-text-dark">From:</span> {descriptionEmail.from}</span>
+                    <span><span className="font-semibold text-text-dark">Sent:</span> {descriptionEmail.sent}</span>
+                  </div>
+                </div>
+                <div className="px-4 py-3">
+                  <div className="whitespace-pre-wrap rounded-md bg-white px-3 py-3 text-sm leading-relaxed text-text-dark">
+                    {descriptionEmail.body || 'No message body found.'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-text-dark leading-relaxed whitespace-pre-wrap">
+                {ticket.description}
+              </div>
+            )}
           </section>
 
           <FileViewer file={viewingFile} onClose={() => setViewingFile(null)} />
@@ -573,13 +668,24 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
                     {!collapsed && (
                       <div className="mt-2 space-y-3">
                         {comment.sourceType === 'email_import' && (
-                          <div className="text-[11px] text-text-light space-y-0.5">
-                            {comment.emailSubject && <div><span className="font-semibold text-text-dark">Subject:</span> {comment.emailSubject}</div>}
-                            {comment.emailFrom && <div><span className="font-semibold text-text-dark">From:</span> {comment.emailFrom}</div>}
-                            {comment.emailSentAt?.toDate && (
-                              <div><span className="font-semibold text-text-dark">Sent:</span> {format(comment.emailSentAt.toDate(), 'MMM d, yyyy HH:mm')}</div>
-                            )}
-                            {comment.sourceFileName && <div><span className="font-semibold text-text-dark">File:</span> {comment.sourceFileName}</div>}
+                          <div className="rounded-lg border border-blue-100 bg-blue-50/70">
+                            <div className="border-b border-blue-100 px-3 py-2">
+                              <div className="text-sm font-semibold text-text-dark">
+                                {comment.emailSubject || comment.sourceFileName || 'Imported email'}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-light">
+                                {comment.emailFrom && <span><span className="font-semibold text-text-dark">From:</span> {comment.emailFrom}</span>}
+                                {comment.emailSentAt?.toDate && (
+                                  <span><span className="font-semibold text-text-dark">Sent:</span> {format(comment.emailSentAt.toDate(), 'MMM d, yyyy HH:mm')}</span>
+                                )}
+                                {comment.sourceFileName && <span><span className="font-semibold text-text-dark">File:</span> {comment.sourceFileName}</span>}
+                              </div>
+                            </div>
+                            <div className="px-3 py-3">
+                              <div className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md bg-white px-3 py-2 text-sm leading-relaxed text-text-dark">
+                                {comment.content}
+                              </div>
+                            </div>
                           </div>
                         )}
 
@@ -610,9 +716,9 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
                               </Button>
                             </div>
                           </div>
-                        ) : (
+                        ) : comment.sourceType !== 'email_import' ? (
                           <p className="text-sm text-text-dark whitespace-pre-wrap">{comment.content}</p>
-                        )}
+                        ) : null}
 
                         {comment.attachments && comment.attachments.length > 0 && (
                           <div className="flex flex-wrap gap-2">
@@ -682,25 +788,6 @@ export function TicketDetailsDialog({ ticket }: TicketDetailsProps) {
                     <p className="text-[11px]">`.msg` files become searchable updates and stay attached to the ticket.</p>
                   </div>
                 )}
-              </div>
-
-              <div className="flex justify-start">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = '.msg';
-                    input.onchange = (e) => {
-                      const files = Array.from((e.target as HTMLInputElement).files || []);
-                      if (files.length > 0) handleFileUpload(files);
-                    };
-                    input.click();
-                  }}
-                >
-                  Import Email (.msg)
-                </Button>
               </div>
 
               <div className="flex items-center justify-between">

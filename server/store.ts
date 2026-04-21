@@ -598,6 +598,36 @@ export class Store {
     return this.getTicket(ticketId);
   }
 
+  async deleteTicket(ticketId: string) {
+    const ticket = await this.getTicket(ticketId);
+    if (!ticket) return null;
+
+    const comments = await this.listComments(ticketId);
+    const attachmentUrls = new Set<string>();
+
+    for (const attachment of ticket.attachments || []) {
+      attachmentUrls.add(attachment.url);
+    }
+    for (const comment of comments) {
+      for (const attachment of comment.attachments || []) {
+        attachmentUrls.add(attachment.url);
+      }
+    }
+
+    if (this.pg) {
+      const result = await this.pg.query('DELETE FROM tickets WHERE id = $1', [ticketId]);
+      if ((result.rowCount ?? 0) === 0) return null;
+    } else {
+      const result = this.sqlite!.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);
+      if (result.changes === 0) return null;
+    }
+
+    return {
+      ticket,
+      attachmentUrls: Array.from(attachmentUrls),
+    };
+  }
+
   async importEmailToTicket(ticketId: string, author: Pick<UserProfile, 'uid' | 'displayName'>, attachment: Attachment, email: {
     subject?: string | null;
     from?: string | null;

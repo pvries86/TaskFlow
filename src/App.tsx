@@ -12,30 +12,18 @@ import {
   Filter, 
   LogOut, 
   Ticket as TicketIcon, 
+  Loader2,
+  MailPlus,
   User as UserIcon,
   History
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { CreateTicketDialog } from './components/CreateTicket';
 import { TicketDetailsDialog } from './components/TicketDetails';
 import { Toaster } from '@/components/ui/sonner';
 import { UserManagement } from './components/UserManagement';
-
-const statusColors: Record<TicketStatus, string> = {
-  new: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  open: 'bg-green-500/10 text-green-500 border-green-500/20',
-  in_progress: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  waiting: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  resolved: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
-  closed: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-};
-
-const priorityColors: Record<TicketPriority, string> = {
-  low: 'bg-slate-100 text-slate-600',
-  medium: 'bg-blue-100 text-blue-600',
-  high: 'bg-orange-100 text-orange-600',
-  critical: 'bg-red-100 text-red-600',
-};
+import { createTicket, deleteTicket, importEmailPreview, updateTicket } from './lib/api';
 
 type DeadlineFilter = 'all' | 'overdue' | 'today' | 'this_week' | 'none';
 
@@ -60,6 +48,28 @@ function endOfThisWeek() {
   return end;
 }
 
+function getDeadlineState(ticket: Ticket) {
+  const deadline = ticket.deadline?.toDate ? ticket.deadline.toDate() : null;
+  if (!deadline) return { kind: 'none' as const, label: 'No deadline', classes: 'border-slate-200 bg-slate-50 text-slate-500' };
+
+  const now = new Date();
+  const todayStart = startOfToday();
+  const todayEnd = endOfToday();
+  const weekEnd = endOfThisWeek();
+
+  if (deadline < now) {
+    return { kind: 'overdue' as const, label: `Overdue ${format(deadline, 'MMM d, HH:mm')}`, classes: 'border-red-200 bg-red-50 text-red-700' };
+  }
+  if (deadline >= todayStart && deadline < todayEnd) {
+    return { kind: 'today' as const, label: `Due today ${format(deadline, 'HH:mm')}`, classes: 'border-amber-200 bg-amber-50 text-amber-700' };
+  }
+  if (deadline >= todayStart && deadline < weekEnd) {
+    return { kind: 'week' as const, label: `This week ${format(deadline, 'EEE HH:mm')}`, classes: 'border-sky-200 bg-sky-50 text-sky-700' };
+  }
+
+  return { kind: 'scheduled' as const, label: format(deadline, 'MMM d, HH:mm'), classes: 'border-slate-200 bg-slate-50 text-slate-600' };
+}
+
 export default function App() {
   const { user, profile, loading: authLoading, signIn, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -69,11 +79,43 @@ export default function App() {
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('all');
   const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [waitingOnly, setWaitingOnly] = useState(false);
+  const [creatingFromMail, setCreatingFromMail] = useState(false);
+  const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<TicketStatus>('open');
+  const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginName, setLoginName] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const { tickets, loading: ticketsLoading } = useTickets(activeTab, user?.uid, user?.email || undefined, searchQuery);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+
+  const hasActiveListFilters =
+    priorityFilter !== 'all' || deadlineFilter !== 'all' || unassignedOnly || waitingOnly;
+
+  const filteredTickets = useMemo(() => {
+    const todayStart = startOfToday();
+    const todayEnd = endOfToday();
+    const weekEnd = endOfThisWeek();
+
+    return tickets.filter((ticket) => {
+      if (priorityFilter !== 'all' && ticket.priority !== priorityFilter) return false;
+      if (unassignedOnly && ticket.assigneeId) return false;
+      if (waitingOnly && ticket.status !== 'waiting') return false;
+
+      const deadline = ticket.deadline?.toDate ? ticket.deadline.toDate() : null;
+      if (deadlineFilter === 'none' && deadline) return false;
+      if (deadlineFilter === 'overdue' && (!deadline || deadline >= new Date())) return false;
+      if (deadlineFilter === 'today' && (!deadline || deadline < todayStart || deadline >= todayEnd)) return false;
+      if (deadlineFilter === 'this_week' && (!deadline || deadline < todayStart || deadline >= weekEnd)) return false;
+      if (deadlineFilter !== 'none' && deadlineFilter !== 'all' && !deadline) return false;
+
+      return true;
+    });
+  }, [deadlineFilter, priorityFilter, tickets, unassignedOnly, waitingOnly]);
+
+  const allVisibleSelected = filteredTickets.length > 0 && filteredTickets.every((ticket) => selectedTicketIds.includes(ticket.id));
+  const bulkMode = selectedTicketIds.length > 0;
 
   if (authLoading) {
     return (
@@ -135,29 +177,108 @@ export default function App() {
     );
   }
 
-  const hasActiveListFilters =
-    priorityFilter !== 'all' || deadlineFilter !== 'all' || unassignedOnly || waitingOnly;
+  const handleInboxImport = async (files: File[]) => {
+    const mailFile = files.find((file) => file.name.toLowerCase().endsWith('.msg'));
+    if (!mailFile) return;
 
-  const filteredTickets = useMemo(() => {
-    const todayStart = startOfToday();
-    const todayEnd = endOfToday();
-    const weekEnd = endOfThisWeek();
+    setCreatingFromMail(true);
+    try {
+      const result = await importEmailPreview(mailFile);
+      const ticket = await createTicket({
+        title: result.draft.title || '(Imported email)',
+        description: result.draft.description || 'Imported from Outlook email.',
+        priority: 'medium',
+        requesterName: result.draft.requesterName || 'Unknown requester',
+        requesterEmail: '',
+        createdById: profile?.uid,
+        createdByName: profile?.displayName,
+        tags: [],
+        attachments: [],
+      });
+      setSelectedTicket(ticket);
+      if (result.parseError) {
+        toast.warning(`Created ticket from ${mailFile.name}, but parsing was limited`);
+      } else {
+        toast.success(`Created ticket from ${mailFile.name}`);
+      }
+    } catch (error: any) {
+      console.error('Failed to create ticket from email', error);
+      toast.error(error?.message || 'Failed to create ticket from email');
+    } finally {
+      setCreatingFromMail(false);
+    }
+  };
 
-    return tickets.filter((ticket) => {
-      if (priorityFilter !== 'all' && ticket.priority !== priorityFilter) return false;
-      if (unassignedOnly && ticket.assigneeId) return false;
-      if (waitingOnly && ticket.status !== 'waiting') return false;
+  const toggleTicketSelection = (ticketId: string) => {
+    setSelectedTicketIds((current) =>
+      current.includes(ticketId) ? current.filter((id) => id !== ticketId) : [...current, ticketId],
+    );
+  };
 
-      const deadline = ticket.deadline?.toDate ? ticket.deadline.toDate() : null;
-      if (deadlineFilter === 'none' && deadline) return false;
-      if (deadlineFilter === 'overdue' && (!deadline || deadline >= new Date())) return false;
-      if (deadlineFilter === 'today' && (!deadline || deadline < todayStart || deadline >= todayEnd)) return false;
-      if (deadlineFilter === 'this_week' && (!deadline || deadline < todayStart || deadline >= weekEnd)) return false;
-      if (deadlineFilter !== 'none' && deadlineFilter !== 'all' && !deadline) return false;
-
-      return true;
+  const toggleSelectAllVisible = () => {
+    setSelectedTicketIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((id) => !filteredTickets.some((ticket) => ticket.id === id));
+      }
+      const next = new Set(current);
+      for (const ticket of filteredTickets) next.add(ticket.id);
+      return Array.from(next);
     });
-  }, [deadlineFilter, priorityFilter, tickets, unassignedOnly, waitingOnly]);
+  };
+
+  const handleTicketDeleted = (ticketId: string) => {
+    setSelectedTicketIds((current) => current.filter((id) => id !== ticketId));
+    if (selectedTicket?.id === ticketId) {
+      setSelectedTicket(null);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedTicketIds.length === 0) return;
+    const confirmed = window.confirm(`Delete ${selectedTicketIds.length} selected ticket${selectedTicketIds.length === 1 ? '' : 's'}?`);
+    if (!confirmed) return;
+
+    setBulkDeleting(true);
+    try {
+      for (const ticketId of selectedTicketIds) {
+        await deleteTicket(ticketId);
+      }
+      toast.success(`Deleted ${selectedTicketIds.length} ticket${selectedTicketIds.length === 1 ? '' : 's'}`);
+      if (selectedTicket && selectedTicketIds.includes(selectedTicket.id)) {
+        setSelectedTicket(null);
+      }
+      setSelectedTicketIds([]);
+    } catch (error: any) {
+      console.error('Failed to delete selected tickets', error);
+      toast.error(error?.message || 'Failed to delete selected tickets');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleBulkStatusUpdate = async (nextStatus = bulkStatus) => {
+    if (selectedTicketIds.length === 0) return;
+
+    setBulkUpdatingStatus(true);
+    try {
+      for (const ticketId of selectedTicketIds) {
+        await updateTicket(ticketId, { status: nextStatus });
+      }
+      toast.success(`Updated ${selectedTicketIds.length} ticket${selectedTicketIds.length === 1 ? '' : 's'} to ${nextStatus.replace('_', ' ')}`);
+      setSelectedTicketIds([]);
+    } catch (error: any) {
+      console.error('Failed to bulk update status', error);
+      toast.error(error?.message || 'Failed to bulk update status');
+    } finally {
+      setBulkUpdatingStatus(false);
+    }
+  };
+
+  const handleBulkStatusChange = async (nextStatus: TicketStatus) => {
+    setBulkStatus(nextStatus);
+    if (selectedTicketIds.length === 0) return;
+    await handleBulkStatusUpdate(nextStatus);
+  };
 
   return (
     <div className="h-screen flex overflow-hidden bg-bg-main">
@@ -239,6 +360,47 @@ export default function App() {
         <div className="flex-1 flex overflow-hidden">
           {/* Ticket List */}
           <aside className="w-[360px] bg-white border-r border-border-theme flex flex-col min-h-0 shrink-0">
+            <div
+              className={`border-b border-border-theme px-4 py-3 transition-colors ${
+                creatingFromMail ? 'bg-slate-50' : 'bg-white'
+              }`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const files = Array.from(e.dataTransfer.files) as File[];
+                if (files.length > 0) handleInboxImport(files);
+              }}
+            >
+              <button
+                type="button"
+                className={`flex w-full items-center gap-3 rounded-lg border border-dashed px-3 py-3 text-left transition-colors ${
+                  creatingFromMail
+                    ? 'border-slate-300 bg-slate-50'
+                    : 'border-border-theme bg-[#f8fafc] hover:border-primary/50 hover:bg-slate-50'
+                }`}
+                onClick={() => {
+                  if (creatingFromMail) return;
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.msg';
+                  input.onchange = (e) => {
+                    const files = Array.from((e.target as HTMLInputElement).files || []);
+                    if (files.length > 0) handleInboxImport(files);
+                  };
+                  input.click();
+                }}
+              >
+                {creatingFromMail ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                ) : (
+                  <MailPlus className="h-4 w-4 shrink-0 text-primary" />
+                )}
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-text-dark">New from email</div>
+                  <div className="text-[11px] text-text-light">Drop an Outlook mail here to create a ticket straight from the list.</div>
+                </div>
+              </button>
+            </div>
             <div className="border-b border-border-theme bg-white/50">
               <div className="p-4 flex items-center justify-between">
               <span className="font-bold text-sm">Tickets ({filteredTickets.length})</span>
@@ -253,6 +415,62 @@ export default function App() {
                 </Button>
               </div>
               </div>
+              {bulkMode && (
+                <div className="border-t border-border-theme px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-[11px] text-text-dark">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        className="h-4 w-4"
+                      />
+                      Select all visible
+                    </label>
+                    <button
+                      type="button"
+                      className="text-[11px] font-medium text-text-light hover:text-text-dark"
+                      onClick={() => {
+                        setSelectedTicketIds([]);
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="text-[11px] font-medium text-text-dark">
+                      {selectedTicketIds.length} selected
+                    </span>
+                    <div className="flex items-center gap-2">
+                    <select
+                      value={bulkStatus}
+                      onChange={(e) => handleBulkStatusChange(e.target.value as TicketStatus)}
+                      className="h-8 rounded-md border border-border-theme bg-white px-2 text-[11px]"
+                      disabled={selectedTicketIds.length === 0 || bulkUpdatingStatus}
+                    >
+                      <option value="new">New</option>
+                      <option value="open">Open</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="waiting">Waiting</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                    {bulkUpdatingStatus && (
+                      <span className="text-[11px] text-text-light">Updating...</span>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                      disabled={selectedTicketIds.length === 0 || bulkDeleting}
+                      onClick={handleDeleteSelected}
+                    >
+                      {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
+                    </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {showListFilters && (
                 <div className="border-t border-border-theme px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
@@ -353,23 +571,55 @@ export default function App() {
                 </div>
               ) : (
                 <div className="divide-y divide-border-theme">
-                  {filteredTickets.map((ticket) => (
+                  {filteredTickets.map((ticket) => {
+                    const deadlineState = getDeadlineState(ticket);
+                    const selected = selectedTicketIds.includes(ticket.id);
+                    return (
                     <div 
                       key={ticket.id} 
-                      className={`p-4 cursor-pointer transition-all border-r-4 ${
-                        selectedTicket?.id === ticket.id 
+                      className={`group p-4 cursor-pointer transition-all border-r-4 ${
+                        selected
+                          ? 'bg-slate-50 border-slate-300'
+                          : selectedTicket?.id === ticket.id 
                           ? 'bg-[#eff6ff] border-primary' 
                           : 'border-transparent hover:bg-slate-50'
                       }`}
                       onClick={() => setSelectedTicket(ticket)}
                     >
                       <div className="flex justify-between text-[10px] text-text-light font-medium mb-1">
-                        <span>#{ticket.id.slice(0, 8).toUpperCase()}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label={selected ? 'Deselect ticket' : 'Select ticket'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTicketSelection(ticket.id);
+                            }}
+                            className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+                              selected
+                                ? 'border-primary bg-primary text-white opacity-100'
+                                : 'border-slate-300 bg-white text-transparent opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            <span className="text-[10px] leading-none">✓</span>
+                          </button>
+                          <span>#{ticket.id.slice(0, 8).toUpperCase()}</span>
+                        </div>
                         <span>{ticket.createdAt?.toDate ? format(ticket.createdAt.toDate(), 'HH:mm') : 'Now'}</span>
                       </div>
                       <h3 className="font-semibold text-sm mb-2 line-clamp-1">
                         {ticket.title}
                       </h3>
+                      <div className="mb-2 flex items-center gap-2">
+                        {deadlineState.kind !== 'none' && (
+                          <Badge variant="outline" className={`text-[10px] ${deadlineState.classes}`}>
+                            {deadlineState.label}
+                          </Badge>
+                        )}
+                        {ticket.attachments && ticket.attachments.length > 0 && (
+                          <span className="text-[10px] text-text-light">{ticket.attachments.length} attachment{ticket.attachments.length === 1 ? '' : 's'}</span>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between">
                         <Badge variant="outline" className={`status-pill ${
                           ticket.priority === 'critical' || ticket.priority === 'high' ? 'status-urgent' : 
@@ -380,7 +630,8 @@ export default function App() {
                         <span className="text-[10px] text-text-light">{ticket.requesterName}</span>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </ScrollArea>
@@ -392,7 +643,8 @@ export default function App() {
               <div key={selectedTicket.id} className="flex-1 flex flex-col overflow-hidden">
                 <TicketDetailsDialog 
                   ticket={tickets.find(t => t.id === selectedTicket.id) || selectedTicket} 
-                  onClose={() => setSelectedTicket(null)} 
+                  onClose={() => setSelectedTicket(null)}
+                  onTicketDeleted={handleTicketDeleted}
                 />
               </div>
             ) : (

@@ -46,6 +46,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || `Request failed with ${response.status}`);
   }
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return response.json();
 }
 
@@ -111,6 +114,12 @@ export async function updateTicket(id: string, updates: Partial<Ticket>) {
     method: 'PATCH',
     body: JSON.stringify(updates),
   }));
+}
+
+export async function deleteTicket(id: string) {
+  return request<void>(`/api/tickets/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function listComments(ticketId: string) {

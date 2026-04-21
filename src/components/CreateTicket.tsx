@@ -279,7 +279,7 @@ export function CreateTicketDialog() {
                         onClick={() => setAttachments(attachments.filter((_, idx) => idx !== i))}
                         className="text-red-500 hover:text-red-700 font-bold"
                       >
-                        ×
+                        x
                       </button>
                     </div>
                   ))}

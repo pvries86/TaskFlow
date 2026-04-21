@@ -290,6 +290,30 @@ app.patch('/api/tickets/:id', async (req, res, next) => {
   }
 });
 
+app.delete('/api/tickets/:id', async (req, res, next) => {
+  try {
+    const result = await store.deleteTicket(req.params.id);
+    if (!result) {
+      res.status(404).json({ error: 'Ticket not found' });
+      return;
+    }
+
+    const uploadsPrefix = '/uploads/';
+    for (const attachmentUrl of result.attachmentUrls) {
+      if (!attachmentUrl.startsWith(uploadsPrefix)) continue;
+      const fileName = attachmentUrl.slice(uploadsPrefix.length);
+      const filePath = path.join(uploadsDir, fileName);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/tickets/:id/comments', async (req, res, next) => {
   try {
     res.json(await store.listComments(req.params.id));
