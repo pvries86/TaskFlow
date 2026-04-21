@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 FROM deps AS build
 COPY . .
@@ -19,7 +19,8 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 python3-pip \
   && python3 -m pip install --break-system-packages --no-cache-dir extract-msg beautifulsoup4 \
   && rm -rf /var/lib/apt/lists/*
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --no-audit --no-fund \
+  && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY src/types.ts ./src/types.ts
