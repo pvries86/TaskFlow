@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useTickets } from './hooks/useTickets';
 import { Ticket, TicketStatus, TicketPriority } from './types';
@@ -6,20 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
-  Plus, 
   Search, 
   Filter, 
   LogOut, 
   Ticket as TicketIcon, 
-  Clock, 
-  AlertCircle,
-  CheckCircle2,
   User as UserIcon,
-  Calendar as CalendarIcon,
-  ChevronRight,
   History
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -44,10 +37,38 @@ const priorityColors: Record<TicketPriority, string> = {
   critical: 'bg-red-100 text-red-600',
 };
 
+type DeadlineFilter = 'all' | 'overdue' | 'today' | 'this_week' | 'none';
+
+function startOfToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function endOfToday() {
+  const today = startOfToday();
+  today.setDate(today.getDate() + 1);
+  return today;
+}
+
+function endOfThisWeek() {
+  const today = startOfToday();
+  const day = today.getDay();
+  const daysUntilSunday = (7 - day) % 7;
+  const end = new Date(today);
+  end.setDate(today.getDate() + daysUntilSunday + 1);
+  return end;
+}
+
 export default function App() {
   const { user, profile, loading: authLoading, signIn, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showListFilters, setShowListFilters] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<TicketPriority | 'all'>('all');
+  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('all');
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [waitingOnly, setWaitingOnly] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginName, setLoginName] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -114,7 +135,29 @@ export default function App() {
     );
   }
 
-  const filteredTickets = tickets;
+  const hasActiveListFilters =
+    priorityFilter !== 'all' || deadlineFilter !== 'all' || unassignedOnly || waitingOnly;
+
+  const filteredTickets = useMemo(() => {
+    const todayStart = startOfToday();
+    const todayEnd = endOfToday();
+    const weekEnd = endOfThisWeek();
+
+    return tickets.filter((ticket) => {
+      if (priorityFilter !== 'all' && ticket.priority !== priorityFilter) return false;
+      if (unassignedOnly && ticket.assigneeId) return false;
+      if (waitingOnly && ticket.status !== 'waiting') return false;
+
+      const deadline = ticket.deadline?.toDate ? ticket.deadline.toDate() : null;
+      if (deadlineFilter === 'none' && deadline) return false;
+      if (deadlineFilter === 'overdue' && (!deadline || deadline >= new Date())) return false;
+      if (deadlineFilter === 'today' && (!deadline || deadline < todayStart || deadline >= todayEnd)) return false;
+      if (deadlineFilter === 'this_week' && (!deadline || deadline < todayStart || deadline >= weekEnd)) return false;
+      if (deadlineFilter !== 'none' && deadlineFilter !== 'all' && !deadline) return false;
+
+      return true;
+    });
+  }, [deadlineFilter, priorityFilter, tickets, unassignedOnly, waitingOnly]);
 
   return (
     <div className="h-screen flex overflow-hidden bg-bg-main">
@@ -196,13 +239,107 @@ export default function App() {
         <div className="flex-1 flex overflow-hidden">
           {/* Ticket List */}
           <aside className="w-[360px] bg-white border-r border-border-theme flex flex-col min-h-0 shrink-0">
-            <div className="p-4 border-b border-border-theme flex items-center justify-between bg-white/50">
+            <div className="border-b border-border-theme bg-white/50">
+              <div className="p-4 flex items-center justify-between">
               <span className="font-bold text-sm">Tickets ({filteredTickets.length})</span>
               <div className="flex gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-8 w-8 ${showListFilters || hasActiveListFilters ? 'bg-slate-100 text-text-dark' : ''}`}
+                  onClick={() => setShowListFilters((current) => !current)}
+                >
                   <Filter className="h-4 w-4 text-text-light" />
                 </Button>
               </div>
+              </div>
+              {showListFilters && (
+                <div className="border-t border-border-theme px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-light">Filters</span>
+                    {hasActiveListFilters && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPriorityFilter('all');
+                          setDeadlineFilter('all');
+                          setUnassignedOnly(false);
+                          setWaitingOnly(false);
+                        }}
+                        className="text-[10px] font-semibold text-text-light hover:text-text-dark"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-light">Priority</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                    {(['all', 'low', 'medium', 'high', 'critical'] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setPriorityFilter(value)}
+                        className={`rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                          priorityFilter === value
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border-theme bg-white text-text-light hover:text-text-dark'
+                        }`}
+                      >
+                        {value === 'all' ? 'All priorities' : value}
+                      </button>
+                    ))}
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-light">Deadline</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {([
+                        ['all', 'Any deadline'],
+                        ['overdue', 'Overdue'],
+                        ['today', 'Due today'],
+                        ['this_week', 'Due this week'],
+                        ['none', 'No deadline'],
+                      ] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setDeadlineFilter(value)}
+                          className={`rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                            deadlineFilter === value
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border-theme bg-white text-text-light hover:text-text-dark'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-light">Queue</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {([
+                        ['unassigned', 'Unassigned only', unassignedOnly, setUnassignedOnly],
+                        ['waiting', 'Waiting only', waitingOnly, setWaitingOnly],
+                      ] as const).map(([key, label, active, setter]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setter(!active)}
+                          className={`rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                            active
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border-theme bg-white text-text-light hover:text-text-dark'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <ScrollArea className="flex-1 min-h-0">
