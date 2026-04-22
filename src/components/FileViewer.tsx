@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, ExternalLink, File as FileIcon, FileText } from 'lucide-react';
+import { Download, ExternalLink, File as FileIcon, FileText, X } from 'lucide-react';
 import { Attachment } from '../types';
 import { Button } from '@/components/ui/button';
 import {
@@ -127,8 +127,11 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
 
   return (
     <Dialog open={!!file} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
-        <DialogHeader className="p-4 border-b bg-white shrink-0 flex flex-row items-center justify-between space-y-0 dark:bg-slate-900">
+      <DialogContent
+        showCloseButton={false}
+        className="!w-[min(96vw,1100px)] !max-w-[min(96vw,1100px)] h-[80vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl"
+      >
+        <DialogHeader className="p-4 border-b bg-white shrink-0 flex flex-row items-center justify-between gap-4 space-y-0 dark:bg-slate-900">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2 bg-slate-100 rounded">
               {isImage ? <FileIcon className="w-4 h-4 text-blue-500" /> : <FileText className="w-4 h-4 text-orange-500" />}
@@ -138,7 +141,7 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
               <p className="text-[10px] text-text-light">{(file.size / 1024).toFixed(1)} KB - {file.type}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -159,17 +162,29 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
                 </a>
               )}
             />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={onClose}
+              title="Close preview"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 bg-slate-50 overflow-auto flex items-center justify-center p-8 dark:bg-slate-950">
+        <div className="flex-1 w-full bg-slate-50 overflow-auto flex items-center justify-center p-6 md:p-8 dark:bg-slate-950">
           {isImage ? (
-            <img
-              src={file.url}
-              alt={file.name}
-              className="max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white dark:bg-slate-900"
-              referrerPolicy="no-referrer"
-            />
+            <div className="flex h-full w-full items-center justify-center">
+              <img
+                src={file.url}
+                alt={file.name}
+                className="block max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white dark:bg-slate-900"
+                referrerPolicy="no-referrer"
+              />
+            </div>
           ) : isPDF ? (
             <iframe
               src={`${file.url}#toolbar=0`}
