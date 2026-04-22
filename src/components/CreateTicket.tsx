@@ -174,12 +174,14 @@ export function CreateTicketDialog() {
         if (!nextOpen) resetForm();
       }}
     >
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="w-4 h-4" />
-          New Ticket
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={(
+          <Button className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Ticket
+          </Button>
+        )}
+      />
       <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>

@@ -139,16 +139,26 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild className="h-8 text-[10px] font-bold">
-              <a href={file.url} download={file.name}>
-                <Download className="w-3 h-3 mr-1" /> Download
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild className="h-8 text-[10px] font-bold">
-              <a href={file.url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="w-3 h-3 mr-1" /> Open Original
-              </a>
-            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-[10px] font-bold"
+              render={(
+                <a href={file.url} download={file.name}>
+                  <Download className="w-3 h-3 mr-1" /> Download
+                </a>
+              )}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-[10px] font-bold"
+              render={(
+                <a href={file.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="w-3 h-3 mr-1" /> Open Original
+                </a>
+              )}
+            />
           </div>
         </DialogHeader>
 
@@ -195,11 +205,10 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
                 This file type ({file.type}) cannot be previewed directly in the browser.
                 Please download it to view the content.
               </p>
-              <Button asChild className="w-full">
-                <a href={file.url} download={file.name}>
-                  Download File
-                </a>
-              </Button>
+              <Button
+                className="w-full"
+                render={<a href={file.url} download={file.name}>Download File</a>}
+              />
             </div>
           )}
         </div>
