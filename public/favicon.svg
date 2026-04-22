@@ -1,0 +1,13 @@
+<svg width="64" height="64" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="handl-favicon-bg" x1="12" y1="12" x2="116" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#132238"/>
+      <stop offset="1" stop-color="#0B5ED7"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="url(#handl-favicon-bg)"/>
+  <rect x="28" y="34" width="72" height="14" rx="7" fill="#D9F4FF"/>
+  <rect x="28" y="57" width="72" height="14" rx="7" fill="#BFEAFF"/>
+  <rect x="28" y="80" width="48" height="14" rx="7" fill="#91DDFF"/>
+  <path d="M84 86L92 94L106 76" stroke="#D9F4FF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

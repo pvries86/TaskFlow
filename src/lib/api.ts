@@ -1,8 +1,9 @@
 import { Attachment, Comment, Requester, Ticket, UserProfile } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-const TOKEN_KEY = 'taskflow_user_id';
-export const TICKETS_CHANGED_EVENT = 'taskflow:tickets-changed';
+const TOKEN_KEY = 'handl_user_id';
+const LEGACY_TOKEN_KEY = 'taskflow_user_id';
+export const TICKETS_CHANGED_EVENT = 'handl:tickets-changed';
 
 export interface LocalUser {
   uid: string;
@@ -36,7 +37,7 @@ function withTimestamps<T extends Record<string, any>>(item: T): T {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
   if (token) headers.set('x-user-id', token);
   if (options.body && !(options.body instanceof FormData)) {
     headers.set('content-type', 'application/json');
@@ -58,11 +59,17 @@ function notifyTicketsChanged() {
 }
 
 export function getStoredUserId() {
-  return localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
+  if (token && !localStorage.getItem(TOKEN_KEY)) {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+  }
+  return token;
 }
 
 export function clearStoredUserId() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export async function login(email: string, displayName: string) {

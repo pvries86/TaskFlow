@@ -83,8 +83,12 @@ export class Store {
     }
 
     const dataDir = process.env.DATA_DIR || defaultDataDir;
+    const handlDbPath = path.join(dataDir, 'handl.sqlite');
+    const legacyDbPath = path.join(dataDir, 'taskflow.sqlite');
+    const sqlitePath = fs.existsSync(handlDbPath) ? handlDbPath : fs.existsSync(legacyDbPath) ? legacyDbPath : handlDbPath;
+
     fs.mkdirSync(dataDir, { recursive: true });
-    this.sqlite = new Database(path.join(dataDir, 'taskflow.sqlite'));
+    this.sqlite = new Database(sqlitePath);
     this.sqlite.pragma('journal_mode = WAL');
   }
 
@@ -461,6 +465,10 @@ export class Store {
 
   async updateTicket(id: string, updates: Partial<Ticket>): Promise<Ticket | null> {
     const allowed: Record<string, string> = {
+      title: 'title',
+      description: 'description',
+      requesterName: 'requester_name',
+      requesterEmail: 'requester_email',
       status: 'status',
       priority: 'priority',
       assigneeId: 'assignee_id',

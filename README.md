@@ -1,6 +1,6 @@
-# TaskFlow
+# Handl
 
-TaskFlow is now a standalone, self-hosted ticketing app. It no longer depends on Firebase for auth, Firestore, or Storage.
+Handl is a standalone, self-hosted ticketing app. It no longer depends on Firebase for auth, Firestore, or Storage.
 
 ## Run With Docker
 
@@ -22,7 +22,7 @@ Uncomment `DATABASE_URL` and the `db` service in `docker-compose.yml`, then run:
 docker compose up --build
 ```
 
-When `DATABASE_URL` is set, TaskFlow creates and uses the same schema in Postgres instead of SQLite.
+When `DATABASE_URL` is set, Handl creates and uses the same schema in Postgres instead of SQLite.
 
 ## Deploy From GitHub To A Docker Host
 
@@ -36,7 +36,7 @@ On your dev box:
 
 ```bash
 git add .
-git commit -m "Make TaskFlow standalone"
+git commit -m "Make Handl standalone"
 git branch -M main
 git remote add origin https://github.com/<github-owner>/<repo-name>.git
 git push -u origin main

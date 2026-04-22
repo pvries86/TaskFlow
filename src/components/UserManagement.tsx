@@ -138,8 +138,8 @@ export function UserManagement() {
   };
 
   return (
-    <div className="flex-1 overflow-hidden bg-white">
-      <div className="h-16 bg-white border-b border-border-theme flex items-center justify-between px-6 shrink-0">
+    <div className="flex-1 overflow-hidden bg-white dark:bg-slate-950">
+      <div className="h-16 bg-white border-b border-border-theme flex items-center justify-between px-6 shrink-0 dark:bg-slate-950">
         <div>
           <h1 className="text-lg font-bold text-text-dark">User Management</h1>
           <p className="text-sm text-text-light">Manage names and roles for local accounts.</p>
@@ -148,12 +148,12 @@ export function UserManagement() {
           placeholder="Search users..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="w-[260px] bg-[#f1f5f9] border-border-theme h-9 text-sm"
+          className="w-[260px] bg-[#f1f5f9] border-border-theme h-9 text-sm dark:bg-slate-900 dark:text-slate-100"
         />
       </div>
 
       <div className="p-6 overflow-auto h-[calc(100vh-4rem)]">
-        <form onSubmit={handleCreateUser} className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-border-theme bg-slate-50 p-4">
+        <form onSubmit={handleCreateUser} className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-border-theme bg-slate-50 p-4 dark:bg-slate-900">
           <div className="min-w-[240px] flex-1">
             <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-text-light">Email</div>
             <Input

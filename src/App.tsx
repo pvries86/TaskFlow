@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useTickets } from './hooks/useTickets';
 import { Ticket, TicketStatus, TicketPriority } from './types';
@@ -11,10 +11,15 @@ import {
   Search, 
   Filter, 
   LogOut, 
+  Moon,
+  Sun,
   Ticket as TicketIcon, 
+  PanelLeftClose,
+  PanelLeftOpen,
   Loader2,
   MailPlus,
   User as UserIcon,
+  Users as UsersIcon,
   History,
   Trash2,
   X
@@ -29,6 +34,10 @@ import { createTicket, deleteTicket, importEmailPreview, updateTicket } from './
 
 type DeadlineFilter = 'all' | 'overdue' | 'today' | 'this_week' | 'none';
 type TicketSort = 'changed_desc' | 'created_desc' | 'priority_desc' | 'deadline_asc';
+const SIDEBAR_PINNED_KEY = 'handl_sidebar_pinned';
+const LEGACY_SIDEBAR_PINNED_KEY = 'taskflow_sidebar_pinned';
+const THEME_KEY = 'handl_theme';
+const LEGACY_THEME_KEY = 'taskflow_theme';
 
 function getStatusClass(status: TicketStatus) {
   switch (status) {
@@ -153,14 +162,29 @@ export default function App() {
   const [waitingOnly, setWaitingOnly] = useState(false);
   const [creatingFromMail, setCreatingFromMail] = useState(false);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<TicketStatus>('open');
   const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginName, setLoginName] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showSidebarSearch, setShowSidebarSearch] = useState(false);
+  const sidebarSearchRef = useRef<HTMLDivElement | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    const stored = window.localStorage.getItem(THEME_KEY) ?? window.localStorage.getItem(LEGACY_THEME_KEY);
+    return stored === 'dark' ? 'dark' : 'light';
+  });
+  const [sidebarPinned, setSidebarPinned] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored =
+      window.localStorage.getItem(SIDEBAR_PINNED_KEY) ?? window.localStorage.getItem(LEGACY_SIDEBAR_PINNED_KEY);
+    return stored === null ? true : stored === 'true';
+  });
   const { tickets, loading: ticketsLoading } = useTickets(activeTab, user?.uid, user?.email || undefined, searchQuery);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const sidebarExpanded = sidebarPinned;
 
   useEffect(() => {
     if (!profile) return;
@@ -171,6 +195,39 @@ export default function App() {
       setActiveTab('all');
     }
   }, [activeTab, profile]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SIDEBAR_PINNED_KEY, String(sidebarPinned));
+    window.localStorage.removeItem(LEGACY_SIDEBAR_PINNED_KEY);
+  }, [sidebarPinned]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const root = window.document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
+    window.localStorage.setItem(THEME_KEY, theme);
+    window.localStorage.removeItem(LEGACY_THEME_KEY);
+  }, [theme]);
+
+  useEffect(() => {
+    if (sidebarExpanded) {
+      setShowSidebarSearch(false);
+    }
+  }, [sidebarExpanded]);
+
+  useEffect(() => {
+    if (!showSidebarSearch) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!sidebarSearchRef.current) return;
+      if (sidebarSearchRef.current.contains(event.target as Node)) return;
+      setShowSidebarSearch(false);
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, [showSidebarSearch]);
 
   const hasActiveListFilters =
     priorityFilter !== 'all' || deadlineFilter !== 'all' || unassignedOnly || waitingOnly;
@@ -231,7 +288,13 @@ export default function App() {
     return filtered;
   }, [deadlineFilter, priorityFilter, ticketSort, tickets, unassignedOnly, waitingOnly]);
 
-  const bulkMode = selectedTicketIds.length > 0;
+  const bulkMode = selectionMode;
+
+  useEffect(() => {
+    if (selectionMode && selectedTicketIds.length === 0) {
+      setSelectionMode(false);
+    }
+  }, [selectionMode, selectedTicketIds.length]);
 
   if (authLoading) {
     return (
@@ -240,7 +303,7 @@ export default function App() {
         <div className="flex items-center justify-center min-h-screen bg-bg-main">
           <div className="animate-pulse flex flex-col items-center gap-4">
             <div className="w-12 h-12 bg-primary/20 rounded-full" />
-            <p className="text-sm text-text-light font-mono">INITIALIZING TASKFLOW...</p>
+            <p className="text-sm text-text-light font-mono">INITIALIZING HANDL...</p>
           </div>
         </div>
       </>
@@ -252,17 +315,15 @@ export default function App() {
       <>
         <Toaster position="top-right" />
         <div className="flex items-center justify-center min-h-screen bg-bg-main p-4">
-          <Card className="w-full max-w-md border-none shadow-2xl bg-white">
+          <Card className="w-full max-w-md border-none shadow-2xl bg-white dark:bg-slate-900">
             <CardHeader className="text-center space-y-1">
-              <div className="mx-auto w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-4">
-                <TicketIcon className="text-white w-6 h-6" />
-              </div>
-              <CardTitle className="text-2xl font-bold tracking-tight">TaskFlow</CardTitle>
-              <CardDescription>Professional Ticketing System</CardDescription>
+              <img src="/handl-mark.svg" alt="Handl" className="mx-auto mb-4 h-14 w-14 rounded-2xl shadow-lg" />
+              <CardTitle className="text-2xl font-bold tracking-tight">Handl</CardTitle>
+              <CardDescription>Handle support without the overhead</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-center text-sm text-text-light">
-                Sign in to manage tasks, track updates, and collaborate with your team.
+                Sign in to keep work moving, capture updates, and stay on top of your queue.
               </p>
               <form
                 className="space-y-3"
@@ -339,6 +400,22 @@ export default function App() {
     );
   };
 
+  const toggleSelectAllVisible = () => {
+    setSelectedTicketIds((current) => {
+      const visibleIds = filteredTickets.map((ticket) => ticket.id);
+      const visibleSelected = visibleIds.length > 0 && visibleIds.every((id) => current.includes(id));
+      if (visibleSelected) {
+        return current.filter((id) => !visibleIds.includes(id));
+      }
+      return Array.from(new Set([...current, ...visibleIds]));
+    });
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedTicketIds([]);
+  };
+
   const handleTicketDeleted = (ticketId: string) => {
     setSelectedTicketIds((current) => current.filter((id) => id !== ticketId));
     if (selectedTicket?.id === ticketId) {
@@ -398,24 +475,72 @@ export default function App() {
       <Toaster position="top-right" />
       
       {/* Sidebar */}
-      <aside className="w-[220px] bg-sidebar text-white flex flex-col py-6 shrink-0">
-        <div className="px-6 mb-8">
-          <div className="flex items-center gap-2 text-[#38bdf8] font-extrabold text-xl tracking-tight">
-            <TicketIcon className="w-6 h-6" />
-            <span>TaskFlow</span>
+      <aside
+        className={`bg-sidebar text-white flex flex-col py-6 shrink-0 transition-[width] duration-200 ${
+          sidebarExpanded ? 'w-[220px]' : 'w-[72px]'
+        }`}
+      >
+        <div className={`mb-8 ${sidebarExpanded ? 'px-6' : 'px-4'}`}>
+          <div className={sidebarExpanded ? 'space-y-2' : ''}>
+            <div
+              className={`flex items-center text-[#38bdf8] font-extrabold tracking-tight ${
+                sidebarExpanded ? 'gap-2 text-xl' : 'justify-center text-xl'
+              }`}
+            >
+              <img src="/handl-mark.svg" alt="Handl" className="h-7 w-7 rounded-lg" />
+              {sidebarExpanded && <span>Handl</span>}
+            </div>
+            {sidebarExpanded && (
+              <p className="max-w-[160px] text-[11px] leading-4 text-white/55">Handle support without the overhead</p>
+            )}
           </div>
         </div>
 
-        <div className="px-6 mb-5">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/35" />
-            <Input
-              placeholder="Search tickets..."
-              className="h-9 border-white/10 bg-white/5 pl-9 text-sm text-white placeholder:text-white/35 focus-visible:border-white/20 focus-visible:ring-white/10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+        <div className={`mb-5 ${sidebarExpanded ? 'px-6' : 'px-4'}`}>
+          {sidebarExpanded ? (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/35" />
+              <Input
+                placeholder="Search tickets..."
+                className="h-9 border-white/10 bg-white/5 pl-9 text-sm text-white placeholder:text-white/35 focus-visible:border-white/20 focus-visible:ring-white/10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div ref={sidebarSearchRef} className="relative flex justify-center">
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-md bg-white/5 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                onClick={() => setShowSidebarSearch((current) => !current)}
+                title="Search tickets"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+              {showSidebarSearch && (
+                <div className="absolute left-full top-1/2 z-30 ml-3 w-72 -translate-y-1/2 rounded-xl border border-white/10 bg-sidebar/95 p-3 shadow-2xl backdrop-blur">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                    <Input
+                      autoFocus
+                      placeholder="Search tickets..."
+                      className="h-9 border-white/10 bg-white/5 pl-9 pr-9 text-sm text-white placeholder:text-white/35 focus-visible:border-white/20 focus-visible:ring-white/10"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-white/45 transition-colors hover:bg-white/5 hover:text-white"
+                      onClick={() => setShowSidebarSearch(false)}
+                      title="Close search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 space-y-1">
@@ -429,40 +554,77 @@ export default function App() {
               ? [{ id: 'assigned', label: 'Assigned to Me', icon: UserIcon }]
               : []),
             { id: 'archived', label: 'Archived Tasks', icon: History },
-            ...(profile?.role === 'admin' ? [{ id: 'users', label: 'Users', icon: UserIcon }] : []),
+            ...(profile?.role === 'admin' ? [{ id: 'users', label: 'Users', icon: UsersIcon }] : []),
           ].map((item) => (
             <div 
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`px-6 py-3 flex items-center gap-3 text-sm cursor-pointer border-l-4 transition-all ${
+              className={`${sidebarExpanded ? 'px-6' : 'px-4 justify-center'} py-3 flex items-center gap-3 text-sm cursor-pointer border-l-4 transition-all ${
                 activeTab === item.id 
                   ? 'bg-white/5 border-primary opacity-100' 
                   : 'border-transparent opacity-60 hover:opacity-100 hover:bg-white/5'
               }`}
+              title={!sidebarExpanded ? item.label : undefined}
             >
               <item.icon className="w-4 h-4" />
-              <span>{item.label}</span>
+              {sidebarExpanded && <span>{item.label}</span>}
             </div>
           ))}
         </nav>
 
-        <div className="mt-auto px-6 pt-4 border-t border-white/10 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden border border-white/20">
+        <div className={`mt-auto pt-4 border-t border-white/10 space-y-4 ${sidebarExpanded ? 'px-6' : 'px-4'}`}>
+          <div className={`${sidebarExpanded ? 'w-full px-0' : 'w-full'} flex items-center ${sidebarExpanded ? 'justify-start gap-3' : 'justify-center'}`}>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 overflow-hidden border border-white/20">
               {profile?.photoURL ? (
-                <img src={profile.photoURL} alt="Avatar" referrerPolicy="no-referrer" />
+                <img src={profile.photoURL} alt="Avatar" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
               ) : (
-                <UserIcon className="w-full h-full p-1.5 text-white/40" />
+                <UserIcon className="h-4 w-4 text-white/40" />
               )}
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold truncate">{profile?.displayName}</p>
-              <p className="text-[10px] text-white/40 uppercase tracking-tighter">{profile?.role}</p>
-            </div>
+            {sidebarExpanded && (
+              <div className="min-w-0">
+                <p className="text-xs font-bold truncate">{profile?.displayName}</p>
+                <p className="text-[10px] text-white/40 uppercase tracking-tighter">{profile?.role}</p>
+              </div>
+            )}
           </div>
-          <Button variant="ghost" size="sm" onClick={logout} className="w-full justify-start text-white/60 hover:text-white hover:bg-white/5 px-0">
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarPinned((current) => !current)}
+            className={`${sidebarExpanded ? 'w-full justify-start px-0' : 'w-full justify-center px-0'} text-white/60 hover:text-white hover:bg-white/5`}
+            title={!sidebarExpanded ? (sidebarPinned ? 'Collapse sidebar' : 'Expand sidebar') : undefined}
+          >
+            {sidebarPinned ? (
+              <PanelLeftClose className={`w-4 h-4 ${sidebarExpanded ? 'mr-2' : ''}`} />
+            ) : (
+              <PanelLeftOpen className={`w-4 h-4 ${sidebarExpanded ? 'mr-2' : ''}`} />
+            )}
+            {sidebarExpanded && (sidebarPinned ? 'Collapse Sidebar' : 'Expand Sidebar')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+            className={`${sidebarExpanded ? 'w-full justify-start px-0' : 'w-full justify-center px-0'} text-white/60 hover:text-white hover:bg-white/5`}
+            title={!sidebarExpanded ? (theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : undefined}
+          >
+            {theme === 'dark' ? (
+              <Sun className={`w-4 h-4 ${sidebarExpanded ? 'mr-2' : ''}`} />
+            ) : (
+              <Moon className={`w-4 h-4 ${sidebarExpanded ? 'mr-2' : ''}`} />
+            )}
+            {sidebarExpanded && (theme === 'dark' ? 'Light Mode' : 'Dark Mode')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={logout}
+            className={`${sidebarExpanded ? 'w-full justify-start px-0' : 'w-full justify-center px-0'} text-white/60 hover:text-white hover:bg-white/5`}
+            title={!sidebarExpanded ? 'Logout' : undefined}
+          >
+            <LogOut className={`w-4 h-4 ${sidebarExpanded ? 'mr-2' : ''}`} />
+            {sidebarExpanded && 'Logout'}
           </Button>
         </div>
       </aside>
@@ -475,10 +637,10 @@ export default function App() {
           <>
         <div className="flex-1 flex overflow-hidden">
           {/* Ticket List */}
-          <aside className="w-[360px] bg-white border-r border-border-theme flex flex-col min-h-0 shrink-0">
+          <aside className="flex w-[360px] min-h-0 shrink-0 flex-col bg-white dark:bg-slate-950">
             <div
-              className={`px-4 py-4 transition-colors ${
-                creatingFromMail ? 'bg-slate-50/70' : 'bg-white'
+              className={`pt-4 pb-3 transition-colors ${
+                creatingFromMail ? 'bg-slate-50/70 dark:bg-slate-900/70' : 'bg-white dark:bg-slate-950'
               }`}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
@@ -487,7 +649,7 @@ export default function App() {
                 if (files.length > 0) handleInboxImport(files);
               }}
             >
-              <div className="rounded-lg bg-[#f8fafc] p-4">
+              <div className="mx-4 rounded-xl bg-[#f8fafc] px-4 py-4 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.7)] dark:bg-slate-900 dark:shadow-[inset_0_0_0_1px_rgba(30,41,59,0.9)]">
                 <div>
                   <CreateTicketDialog triggerClassName="h-9 w-full justify-center shadow-none" triggerLabel="New Ticket" />
                 </div>
@@ -496,8 +658,8 @@ export default function App() {
                   type="button"
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
                     creatingFromMail
-                      ? 'bg-white/80 ring-1 ring-slate-200'
-                      : 'bg-white/70 hover:bg-white'
+                      ? 'bg-white/80 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700'
+                      : 'bg-white/70 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800'
                   }`}
                   onClick={() => {
                     if (creatingFromMail) return;
@@ -523,7 +685,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div className="border-b border-border-theme bg-white/50">
+            <div className="mx-4 mb-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-[#f8fafc] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.7)] dark:bg-slate-900 dark:shadow-[inset_0_0_0_1px_rgba(30,41,59,0.9)]">
               <div className="flex items-center justify-between gap-3 p-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="shrink-0 font-bold text-sm">Tickets ({filteredTickets.length})</span>
@@ -534,53 +696,22 @@ export default function App() {
                   )}
                 </div>
                 {bulkMode ? (
-                  <div className="flex shrink-0 items-center gap-2">
-                    <select
-                      value={bulkStatus}
-                      onChange={(e) => handleBulkStatusChange(e.target.value as TicketStatus)}
-                      className="h-8 min-w-[92px] rounded-md border border-border-theme bg-white px-2 text-[11px]"
-                      disabled={selectedTicketIds.length === 0 || bulkUpdatingStatus}
-                    >
-                      <option value="new">New</option>
-                      <option value="open">Open</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="waiting">Waiting</option>
-                      <option value="resolved">Resolved</option>
-                      <option value="closed">Closed</option>
-                    </select>
-                    {bulkUpdatingStatus && (
-                      <span className="text-[11px] text-text-light">Updating...</span>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 disabled:border-border-theme disabled:text-text-light"
-                      disabled={selectedTicketIds.length === 0 || bulkDeleting}
-                      onClick={handleDeleteSelected}
-                      title="Delete selected tickets"
-                    >
-                      {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-text-light hover:text-text-dark"
-                      onClick={() => {
-                        setSelectedTicketIds([]);
-                      }}
-                      title="Exit selection"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-text-light hover:text-text-dark"
+                    onClick={exitSelectionMode}
+                    title="Exit selection"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 ) : (
                   <div className="flex items-center gap-2">
                     <select
                       value={ticketSort}
                       onChange={(e) => setTicketSort(e.target.value as TicketSort)}
-                      className="h-8 min-w-[88px] rounded-md border border-border-theme bg-white px-2 text-[11px] text-text-dark"
+                    className="h-8 min-w-[88px] rounded-md border border-border-theme bg-white px-2 text-[11px] text-text-dark dark:bg-slate-950 dark:text-slate-100"
                     >
                       <option value="changed_desc">Changed</option>
                       <option value="created_desc">Created</option>
@@ -590,7 +721,7 @@ export default function App() {
                     <Button
                       variant="outline"
                       size="icon"
-                      className={`h-8 w-8 border-border-theme bg-white ${showListFilters || hasActiveListFilters ? 'bg-slate-100 text-text-dark' : 'text-text-light'}`}
+                    className={`h-8 w-8 border-border-theme bg-white dark:bg-slate-950 ${showListFilters || hasActiveListFilters ? 'bg-slate-100 text-text-dark dark:bg-slate-800 dark:text-slate-100' : 'text-text-light'}`}
                       onClick={() => setShowListFilters((current) => !current)}
                     >
                       <Filter className="h-4 w-4" />
@@ -599,7 +730,7 @@ export default function App() {
                 )}
               </div>
               {showListFilters && (
-                <div className="border-t border-border-theme px-4 py-3">
+                <div className="bg-slate-50/75 px-4 py-3 shadow-[inset_0_1px_0_rgba(226,232,240,0.8)] dark:bg-slate-950/80 dark:shadow-[inset_0_1px_0_rgba(30,41,59,0.9)]">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-text-light">Filters</span>
                     {hasActiveListFilters && (
@@ -685,9 +816,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </div>
-
-            <ScrollArea className="flex-1 min-h-0">
+              <ScrollArea className="flex-1 min-h-0">
               {ticketsLoading ? (
                 <div className="p-8 text-center text-text-light animate-pulse font-mono text-xs">
                   LOADING...
@@ -697,21 +826,27 @@ export default function App() {
                   <p className="text-sm text-text-light">No tickets found</p>
                 </div>
               ) : (
-                <div className="divide-y divide-border-theme">
+                <div className="space-y-2 bg-[#f8fafc] px-2 py-2 dark:bg-slate-900">
                   {filteredTickets.map((ticket) => {
                     const deadlineState = getDeadlineState(ticket);
                     const selected = selectedTicketIds.includes(ticket.id);
                     return (
                     <div 
                       key={ticket.id} 
-                      className={`group p-4 cursor-pointer transition-all border-r-4 ${
+                      className={`group cursor-pointer rounded-xl p-4 shadow-sm transition-all ${
                         selected
-                          ? 'bg-slate-50 border-slate-300'
+                          ? 'bg-[linear-gradient(135deg,#f7fbff_0%,#eef5ff_100%)] ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700 dark:bg-none'
                           : selectedTicket?.id === ticket.id 
-                          ? 'bg-[#eff6ff] border-primary' 
-                          : 'border-transparent hover:bg-slate-50'
+                          ? 'bg-[linear-gradient(135deg,#eff6ff_0%,#f8fbff_100%)] ring-1 ring-primary/25 dark:bg-slate-900 dark:ring-primary/35 dark:bg-none' 
+                          : 'bg-white/92 hover:bg-slate-50 hover:ring-1 hover:ring-slate-200/80 dark:bg-slate-950 dark:hover:bg-slate-800 dark:hover:ring-primary/20'
                       }`}
-                      onClick={() => setSelectedTicket(ticket)}
+                      onClick={() => {
+                        if (selectionMode) {
+                          toggleTicketSelection(ticket.id);
+                          return;
+                        }
+                        setSelectedTicket(ticket);
+                      }}
                     >
                       <div className="flex justify-between text-[10px] text-text-light font-medium mb-1">
                         <div className="flex items-center gap-2">
@@ -720,12 +855,15 @@ export default function App() {
                             aria-label={selected ? 'Deselect ticket' : 'Select ticket'}
                             onClick={(e) => {
                               e.stopPropagation();
+                              setSelectionMode(true);
                               toggleTicketSelection(ticket.id);
                             }}
                             className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
                               selected
                                 ? 'border-primary bg-primary text-white opacity-100'
-                                : 'border-slate-300 bg-white text-transparent opacity-0 group-hover:opacity-100'
+                                : selectionMode
+                                  ? 'border-slate-300 bg-white text-transparent opacity-100 dark:border-slate-600 dark:bg-slate-950'
+                                  : 'border-slate-300 bg-white text-transparent opacity-0 group-hover:opacity-100 dark:border-slate-600 dark:bg-slate-950'
                             }`}
                           >
                             <span className="text-[10px] leading-none">✓</span>
@@ -738,8 +876,7 @@ export default function App() {
                         {ticket.title}
                       </h3>
                       <div className="mb-2 flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${getPriorityClass(ticket.priority)}`}>
-                          <span className="h-2 w-2 rounded-full bg-current" />
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${getPriorityClass(ticket.priority)}`}>
                           <span>{getPriorityLabel(ticket.priority)}</span>
                         </span>
                         {deadlineState.kind !== 'none' && (
@@ -764,11 +901,71 @@ export default function App() {
                   })}
                 </div>
               )}
-            </ScrollArea>
+              </ScrollArea>
+              {selectionMode && (
+                <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(239,246,255,0.92)_100%)] px-4 py-3 shadow-[inset_0_1px_0_rgba(226,232,240,0.8)] dark:bg-slate-900 dark:bg-none dark:shadow-[inset_0_1px_0_rgba(30,41,59,0.9)]">
+                <div className="flex items-center justify-between gap-3 text-[11px]">
+                  <span className="font-medium text-text-dark dark:text-slate-100">{selectedTicketIds.length} selected</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="font-medium text-text-light hover:text-text-dark dark:text-slate-400 dark:hover:text-slate-100"
+                      onClick={toggleSelectAllVisible}
+                    >
+                      Select visible
+                    </button>
+                    <button
+                      type="button"
+                      className="font-medium text-text-light hover:text-text-dark disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-100"
+                      onClick={() => setSelectedTicketIds([])}
+                      disabled={selectedTicketIds.length === 0}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <select
+                    value={bulkStatus}
+                    onChange={(e) => handleBulkStatusChange(e.target.value as TicketStatus)}
+                    className="h-8 min-w-0 flex-1 rounded-md border border-border-theme bg-white px-2 text-[11px] dark:bg-slate-950 dark:text-slate-100"
+                    disabled={selectedTicketIds.length === 0 || bulkUpdatingStatus}
+                  >
+                    <option value="new">New</option>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="waiting">Waiting</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 disabled:border-border-theme disabled:text-text-light"
+                    disabled={selectedTicketIds.length === 0 || bulkDeleting}
+                    onClick={handleDeleteSelected}
+                    title="Delete selected tickets"
+                  >
+                    {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 shrink-0 px-2 text-[11px] text-text-light hover:text-text-dark dark:text-slate-400 dark:hover:text-slate-100"
+                    onClick={exitSelectionMode}
+                  >
+                    Done
+                  </Button>
+                </div>
+                </div>
+              )}
+            </div>
           </aside>
 
           {/* Detail Pane */}
-          <main className="flex-1 bg-white overflow-hidden flex flex-col">
+          <main className="flex-1 bg-white overflow-hidden flex flex-col dark:bg-slate-950">
             {selectedTicket ? (
               <div key={selectedTicket.id} className="flex-1 flex flex-col overflow-hidden">
                 <TicketDetailsDialog 

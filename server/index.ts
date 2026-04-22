@@ -658,6 +658,6 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 await store.init();
 
 app.listen(port, () => {
-  console.log(`TaskFlow listening on http://0.0.0.0:${port}`);
+  console.log(`Handl listening on http://0.0.0.0:${port}`);
   console.log(process.env.DATABASE_URL ? 'Using Postgres database' : `Using SQLite database in ${dataDir}`);
 });

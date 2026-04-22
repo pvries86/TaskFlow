@@ -128,7 +128,7 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
   return (
     <Dialog open={!!file} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
-        <DialogHeader className="p-4 border-b bg-white shrink-0 flex flex-row items-center justify-between space-y-0">
+        <DialogHeader className="p-4 border-b bg-white shrink-0 flex flex-row items-center justify-between space-y-0 dark:bg-slate-900">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2 bg-slate-100 rounded">
               {isImage ? <FileIcon className="w-4 h-4 text-blue-500" /> : <FileText className="w-4 h-4 text-orange-500" />}
@@ -162,22 +162,22 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
           </div>
         </DialogHeader>
 
-        <div className="flex-1 bg-slate-50 overflow-auto flex items-center justify-center p-8">
+        <div className="flex-1 bg-slate-50 overflow-auto flex items-center justify-center p-8 dark:bg-slate-950">
           {isImage ? (
             <img
               src={file.url}
               alt={file.name}
-              className="max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white"
+              className="max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white dark:bg-slate-900"
               referrerPolicy="no-referrer"
             />
           ) : isPDF ? (
             <iframe
               src={`${file.url}#toolbar=0`}
-              className="w-full h-full border-none rounded-lg shadow-lg bg-white"
+              className="w-full h-full border-none rounded-lg shadow-lg bg-white dark:bg-slate-900"
               title={file.name}
             />
           ) : isTextFile ? (
-            <div className="h-full w-full overflow-hidden rounded-lg border bg-white shadow-lg">
+            <div className="h-full w-full overflow-hidden rounded-lg border bg-white shadow-lg dark:bg-slate-900">
               {loadingText ? (
                 <div className="flex h-full items-center justify-center text-sm text-text-light">
                   Loading preview...
@@ -196,7 +196,7 @@ export function FileViewer({ file, onClose }: FileViewerProps) {
               )}
             </div>
           ) : (
-            <div className="text-center p-12 bg-white rounded-2xl shadow-sm border max-w-sm">
+            <div className="text-center p-12 bg-white rounded-2xl shadow-sm border max-w-sm dark:bg-slate-900">
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText className="w-8 h-8 text-slate-300" />
               </div>

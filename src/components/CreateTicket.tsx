@@ -137,6 +137,13 @@ export function CreateTicketDialog({
     }
   };
 
+  const handleClipboardPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) return;
+    event.preventDefault();
+    await handleFileUpload(files);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.description) {
@@ -263,6 +270,9 @@ export function CreateTicketDialog({
                 className="min-h-[120px]"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onPaste={(e) => {
+                  void handleClipboardPaste(e);
+                }}
                 required
               />
             </div>

@@ -75,13 +75,13 @@ function getPriorityClass(priority: TicketPriority) {
 function getPriorityLabel(priority: TicketPriority) {
   switch (priority) {
     case 'low':
-      return 'Low Priority';
+      return 'Low';
     case 'medium':
-      return 'Medium Priority';
+      return 'Medium';
     case 'high':
-      return 'High Priority';
+      return 'High';
     case 'critical':
-      return 'Critical Priority';
+      return 'Critical';
     default:
       return priority;
   }
@@ -614,6 +614,13 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
     }
   };
 
+  const handleClipboardPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) return;
+    event.preventDefault();
+    await handleFileUpload(files);
+  };
+
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
@@ -740,14 +747,14 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
   );
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white dark:bg-slate-950">
       <div className="min-h-[118px] p-8 flex justify-between items-start gap-6 shrink-0">
         <div>
           <div className="text-sm font-medium text-text-light uppercase tracking-wider mb-1">
             TICKET #{ticket.id.slice(0, 8).toUpperCase()}
           </div>
           {editingDetails ? (
-            <div className="max-w-[640px] rounded-xl border border-border-theme bg-white px-4 py-3 shadow-sm">
+            <div className="max-w-[640px] rounded-xl border border-border-theme bg-white px-4 py-3 shadow-sm dark:bg-slate-900">
               <Input
                 value={detailsDraft.title}
                 onChange={(e) => setDetailsDraft((current) => ({ ...current, title: e.target.value }))}
@@ -789,7 +796,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                 render={(
                   <button
                     type="button"
-                    className={`status-pill inline-flex h-8 items-center gap-2 rounded-full px-3 text-[11px] ${getPriorityClass(ticket.priority)}`}
+                    className={`inline-flex h-8 items-center gap-2 rounded-full px-3 text-[11px] font-medium ${getPriorityClass(ticket.priority)}`}
                   >
                     <span>{getPriorityLabel(ticket.priority)}</span>
                     <ChevronDown className="h-3.5 w-3.5" />
@@ -828,7 +835,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                   <div className="flex flex-nowrap gap-1.5">
                     <button
                       type="button"
-                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50"
+                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-950 dark:hover:bg-slate-900"
                       onClick={() => void quickSetDeadline('today')}
                       disabled={savingDeadline}
                     >
@@ -836,7 +843,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                     </button>
                     <button
                       type="button"
-                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50"
+                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-950 dark:hover:bg-slate-900"
                       onClick={() => void quickSetDeadline('tomorrow')}
                       disabled={savingDeadline}
                     >
@@ -844,7 +851,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                     </button>
                     <button
                       type="button"
-                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50"
+                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-950 dark:hover:bg-slate-900"
                       onClick={() => void quickSetDeadline('week')}
                       disabled={savingDeadline}
                     >
@@ -852,7 +859,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                     </button>
                     <button
                       type="button"
-                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50"
+                      className="h-7 shrink-0 rounded-md border border-border-theme bg-white px-2 text-[10px] font-medium text-text-dark transition-colors hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-950 dark:hover:bg-slate-900"
                       onClick={() => void quickSetDeadline('month')}
                       disabled={savingDeadline}
                     >
@@ -865,7 +872,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                       value={deadlineDate}
                       onChange={(e) => void applyDeadlineDate(e.target.value)}
                       disabled={savingDeadline}
-                      className="h-8 flex-1 rounded-md border border-border-theme bg-white px-2 text-xs outline-none transition-colors focus:border-primary"
+                      className="h-8 flex-1 rounded-md border border-border-theme bg-white px-2 text-xs outline-none transition-colors focus:border-primary dark:bg-slate-950 dark:text-slate-100"
                     />
                     <button
                       type="button"
@@ -924,11 +931,11 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
 
       <ScrollArea className="flex-1 min-h-0">
         <div className="flex min-h-full w-full max-w-[1400px] flex-col p-8">
-          <div className="grid grid-cols-2 gap-6 p-6 bg-[#f8fafc] rounded-xl border border-border-theme">
+          <div className="grid grid-cols-2 gap-6 rounded-xl bg-[linear-gradient(135deg,#f8fbff_0%,#f8fafc_100%)] p-6 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.8)] dark:bg-none dark:bg-slate-900 dark:shadow-[inset_0_0_0_1px_rgba(30,41,59,0.9)]">
             <div>
               <div className="text-[10px] font-bold uppercase tracking-widest text-text-light mb-1">Requestor</div>
               {editingDetails ? (
-                <div className="max-w-[280px] rounded-lg border border-border-theme bg-white px-3 py-2 shadow-sm">
+                <div className="max-w-[280px] rounded-lg border border-border-theme bg-white px-3 py-2 shadow-sm dark:bg-slate-950">
                   <Input
                     value={detailsDraft.requesterName}
                     onChange={(e) => setDetailsDraft((current) => ({ ...current, requesterName: e.target.value }))}
@@ -942,7 +949,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
             <div>
               <div className="text-[10px] font-bold uppercase tracking-widest text-text-light mb-1">Assigned To</div>
               <Select value={ticket.assigneeId || 'unassigned'} onValueChange={handleAssigneeChange}>
-                <SelectTrigger className="h-7 text-xs w-48 bg-white">
+                <SelectTrigger className="h-7 text-xs w-48 bg-white dark:bg-slate-950 dark:text-slate-100">
                   <span className="truncate">{selectedAssigneeLabel}</span>
                 </SelectTrigger>
                 <SelectContent>
@@ -958,7 +965,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
           <section className="mt-8">
             <h4 className="text-[10px] font-bold uppercase tracking-widest text-text-light mb-3">Description</h4>
             {editingDetails ? (
-              <div className="rounded-xl border border-border-theme bg-white p-4 shadow-sm">
+              <div className="rounded-xl border border-border-theme bg-white p-4 shadow-sm dark:bg-slate-900">
                 <Textarea
                   value={detailsDraft.description}
                   onChange={(e) => setDetailsDraft((current) => ({ ...current, description: e.target.value }))}
@@ -966,8 +973,8 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                 />
               </div>
             ) : descriptionEmail ? (
-              <div className="rounded-lg border border-blue-100 bg-blue-50/70">
-                <div className="border-b border-blue-100 px-4 py-3">
+              <div className="rounded-lg border border-blue-100 bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900">
+                <div className="border-b border-blue-100 px-4 py-3 dark:border-slate-700">
                   <div className="text-sm font-semibold text-text-dark">{descriptionEmail.subject}</div>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-light">
                     <span><span className="font-semibold text-text-dark">From:</span> {descriptionEmail.from}</span>
@@ -975,7 +982,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                   </div>
                 </div>
                 <div className="px-4 py-3">
-                  <div className="whitespace-pre-wrap rounded-md bg-white px-3 py-3 text-sm leading-relaxed text-text-dark">
+                  <div className="whitespace-pre-wrap rounded-md bg-white px-3 py-3 text-sm leading-relaxed text-text-dark dark:bg-slate-950">
                     {descriptionEmail.body || 'No message body found.'}
                   </div>
                 </div>
@@ -1002,15 +1009,15 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                 {commentOrder === 'desc' ? 'Newest first' : 'Oldest first'}
               </Button>
             </div>
-            <div className="space-y-4 border-l-2 border-border-theme pl-6">
+            <div className="space-y-4 pl-6 shadow-[-2px_0_0_0_rgba(191,219,254,0.7)] dark:shadow-[-2px_0_0_0_rgba(51,65,85,0.9)]">
               {orderedComments.map((comment) => {
                 const collapsed = collapsedComments[comment.id] ?? false;
                 const editing = editingCommentId === comment.id;
                 const canEdit = comment.sourceType !== 'email_import';
 
                 return (
-                  <div key={comment.id} className="relative rounded-lg border border-transparent p-3 hover:border-border-theme/70">
-                    <div className="absolute -left-[31px] top-4 w-2 h-2 rounded-full bg-border-theme border-4 border-white" />
+                  <div key={comment.id} className="relative rounded-lg bg-[linear-gradient(135deg,rgba(248,250,252,0.82)_0%,rgba(255,255,255,0.96)_100%)] p-3 shadow-[inset_0_0_0_1px_rgba(226,232,240,0.45)] transition-shadow hover:shadow-[inset_0_0_0_1px_rgba(148,163,184,0.4)] dark:bg-none dark:bg-slate-900 dark:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.8)] dark:hover:shadow-[inset_0_0_0_1px_rgba(71,85,105,0.9)]">
+                    <div className="absolute -left-[31px] top-4 h-2 w-2 rounded-full bg-sky-200 shadow-[0_0_0_4px_white,0_0_0_7px_rgba(219,234,254,0.9)] dark:bg-sky-300 dark:shadow-[0_0_0_4px_#020617,0_0_0_7px_rgba(56,189,248,0.28)]" />
 
                     <div className="flex items-start justify-between gap-3">
                       <button
@@ -1025,7 +1032,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                             {comment.createdAt?.toDate ? format(comment.createdAt.toDate(), 'MMM d, HH:mm') : 'Just now'}
                           </span>
                           {comment.sourceType === 'email_import' && (
-                            <Badge variant="outline" className="text-[8px] h-4 uppercase tracking-tighter bg-blue-50 text-blue-700 border-blue-200">
+                            <Badge variant="outline" className="text-[8px] h-4 uppercase tracking-tighter bg-blue-50 text-blue-700 border-blue-200 dark:border-sky-500/30 dark:bg-sky-500/12 dark:text-sky-300">
                               Imported Email
                             </Badge>
                           )}
@@ -1053,8 +1060,8 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                     {!collapsed && (
                       <div className="mt-2 space-y-3">
                         {comment.sourceType === 'email_import' && (
-                          <div className="rounded-lg border border-blue-100 bg-blue-50/70">
-                            <div className="border-b border-blue-100 px-3 py-2">
+                          <div className="rounded-lg border border-blue-100 bg-blue-50/70 dark:border-slate-700 dark:bg-slate-950">
+                            <div className="border-b border-blue-100 px-3 py-2 dark:border-slate-700">
                               <div className="text-sm font-semibold text-text-dark">
                                 {comment.emailSubject || comment.sourceFileName || 'Imported email'}
                               </div>
@@ -1067,7 +1074,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
                               </div>
                             </div>
                             <div className="px-3 py-3">
-                              <div className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md bg-white px-3 py-2 text-sm leading-relaxed text-text-dark">
+                              <div className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md bg-white px-3 py-2 text-sm leading-relaxed text-text-dark dark:bg-slate-950">
                                 {comment.content}
                               </div>
                             </div>
@@ -1123,14 +1130,23 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
             <form id="ticket-update-form" onSubmit={handleAddComment} className="flex flex-1 flex-col space-y-4">
               <Textarea
                 placeholder="Add an update..."
-                className="min-h-[180px] flex-1 bg-white border-border-theme rounded-xl p-4 text-sm focus-visible:ring-primary"
+                className="min-h-[180px] flex-1 bg-white border-border-theme rounded-xl p-4 text-sm focus-visible:ring-primary dark:bg-slate-900 dark:text-slate-100"
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.altKey && e.key === 'Enter' && newComment.trim() && !loading && !uploading) {
+                    e.preventDefault();
+                    void handleAddComment(e as unknown as React.FormEvent);
+                  }
+                }}
+                onPaste={(e) => {
+                  void handleClipboardPaste(e);
+                }}
               />
 
               <div
                 className={`border-2 border-dashed border-border-theme p-6 text-center rounded-xl transition-all cursor-pointer ${
-                  uploading ? 'bg-slate-100 border-slate-300' : 'bg-[#fafafa] text-text-light text-sm hover:bg-slate-50'
+                  uploading ? 'bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-700' : 'bg-[#fafafa] text-text-light text-sm hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800'
                 }`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
@@ -1176,7 +1192,7 @@ export function TicketDetailsDialog({ ticket, onClose, onTicketDeleted }: Ticket
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-text-light mb-3">Attachments</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {ticket.attachments.map((file) => (
-                  <div key={file.url} className="flex flex-col gap-2 p-3 bg-white border border-border-theme rounded-lg hover:bg-slate-50 transition-all group">
+                  <div key={file.url} className="flex flex-col gap-2 p-3 bg-white border border-border-theme rounded-lg hover:bg-slate-50 transition-all group dark:bg-slate-900 dark:hover:bg-slate-800">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <Paperclip className="w-3 h-3 text-text-light shrink-0" />
