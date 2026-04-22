@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useTickets } from './hooks/useTickets';
 import { Ticket, TicketStatus, TicketPriority } from './types';
@@ -92,6 +92,16 @@ export default function App() {
   const { tickets, loading: ticketsLoading } = useTickets(activeTab, user?.uid, user?.email || undefined, searchQuery);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
+  useEffect(() => {
+    if (!profile) return;
+    if (activeTab === 'users' && profile.role !== 'admin') {
+      setActiveTab('all');
+    }
+    if (activeTab === 'assigned' && profile.role === 'user') {
+      setActiveTab('all');
+    }
+  }, [activeTab, profile]);
+
   const hasActiveListFilters =
     priorityFilter !== 'all' || deadlineFilter !== 'all' || unassignedOnly || waitingOnly;
 
@@ -156,61 +166,69 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-bg-main">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-primary/20 rounded-full" />
-          <p className="text-sm text-text-light font-mono">INITIALIZING TASKFLOW...</p>
+      <>
+        <Toaster position="top-right" />
+        <div className="flex items-center justify-center min-h-screen bg-bg-main">
+          <div className="animate-pulse flex flex-col items-center gap-4">
+            <div className="w-12 h-12 bg-primary/20 rounded-full" />
+            <p className="text-sm text-text-light font-mono">INITIALIZING TASKFLOW...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-bg-main p-4">
-        <Card className="w-full max-w-md border-none shadow-2xl bg-white">
-          <CardHeader className="text-center space-y-1">
-            <div className="mx-auto w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-4">
-              <TicketIcon className="text-white w-6 h-6" />
-            </div>
-            <CardTitle className="text-2xl font-bold tracking-tight">TaskFlow</CardTitle>
-            <CardDescription>Professional Ticketing System</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-center text-sm text-text-light">
-              Sign in to manage tasks, track updates, and collaborate with your team.
-            </p>
-            <form
-              className="space-y-3"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                setLoginLoading(true);
-                try {
-                  await signIn(loginEmail, loginName);
-                } finally {
-                  setLoginLoading(false);
-                }
-              }}
-            >
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={loginEmail}
-                onChange={(event) => setLoginEmail(event.target.value)}
-                required
-              />
-              <Input
-                placeholder="Your name"
-                value={loginName}
-                onChange={(event) => setLoginName(event.target.value)}
-              />
-              <Button type="submit" className="w-full py-6 text-lg font-medium" size="lg" disabled={loginLoading}>
-                {loginLoading ? 'Signing in...' : 'Sign in'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+      <>
+        <Toaster position="top-right" />
+        <div className="flex items-center justify-center min-h-screen bg-bg-main p-4">
+          <Card className="w-full max-w-md border-none shadow-2xl bg-white">
+            <CardHeader className="text-center space-y-1">
+              <div className="mx-auto w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-4">
+                <TicketIcon className="text-white w-6 h-6" />
+              </div>
+              <CardTitle className="text-2xl font-bold tracking-tight">TaskFlow</CardTitle>
+              <CardDescription>Professional Ticketing System</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-center text-sm text-text-light">
+                Sign in to manage tasks, track updates, and collaborate with your team.
+              </p>
+              <form
+                className="space-y-3"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  setLoginLoading(true);
+                  try {
+                    await signIn(loginEmail, loginName);
+                  } catch (error: any) {
+                    toast.error(error?.message || 'Sign in failed');
+                  } finally {
+                    setLoginLoading(false);
+                  }
+                }}
+              >
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  required
+                />
+                <Input
+                  placeholder="Your name"
+                  value={loginName}
+                  onChange={(event) => setLoginName(event.target.value)}
+                />
+                <Button type="submit" className="w-full py-6 text-lg font-medium" size="lg" disabled={loginLoading}>
+                  {loginLoading ? 'Signing in...' : 'Sign in'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </>
     );
   }
 

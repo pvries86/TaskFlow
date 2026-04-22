@@ -207,14 +207,49 @@ export class Store {
     const existing = await this.getUserByEmail(normalizedEmail);
     if (existing) return existing;
 
+    if (!adminEmails().includes(normalizedEmail)) {
+      throw new Error('This account has not been provisioned yet');
+    }
+
     const uid = nanoid(16);
-    const role = adminEmails().includes(normalizedEmail) ? 'admin' : 'user';
+    const role: UserProfile['role'] = 'admin';
     const profile: UserProfile = {
       uid,
       email: normalizedEmail,
       displayName: displayName?.trim() || normalizedEmail.split('@')[0],
       photoURL: '',
       role,
+    };
+
+    if (this.pg) {
+      await this.pg.query(
+        'INSERT INTO users (uid, email, display_name, photo_url, role) VALUES ($1, $2, $3, $4, $5)',
+        [profile.uid, profile.email, profile.displayName, profile.photoURL, profile.role],
+      );
+      return profile;
+    }
+
+    this.sqlite!.prepare(
+      'INSERT INTO users (uid, email, display_name, photo_url, role) VALUES (?, ?, ?, ?, ?)',
+    ).run(profile.uid, profile.email, profile.displayName, profile.photoURL, profile.role);
+    return profile;
+  }
+
+  async createUser(input: { email: string; displayName?: string; role?: UserProfile['role'] }): Promise<UserProfile> {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    if (!normalizedEmail) throw new Error('Email is required');
+
+    const existing = await this.getUserByEmail(normalizedEmail);
+    if (existing) {
+      throw new Error('A user with that email already exists');
+    }
+
+    const profile: UserProfile = {
+      uid: nanoid(16),
+      email: normalizedEmail,
+      displayName: input.displayName?.trim() || normalizedEmail.split('@')[0],
+      photoURL: '',
+      role: input.role || 'user',
     };
 
     if (this.pg) {

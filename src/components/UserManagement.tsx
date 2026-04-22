@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { UserProfile } from '../types';
-import { deleteUser, listUsers, updateUser } from '../lib/api';
+import { createUser, deleteUser, listUsers, updateUser } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -30,6 +30,12 @@ export function UserManagement() {
   const [users, setUsers] = useState<EditableUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [newUser, setNewUser] = useState({
+    email: '',
+    displayName: '',
+    role: 'user' as UserProfile['role'],
+  });
+  const [creatingUser, setCreatingUser] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +119,24 @@ export function UserManagement() {
     }
   };
 
+  const handleCreateUser = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setCreatingUser(true);
+    try {
+      const created = await createUser(newUser);
+      setUsers((current) =>
+        [...current, created].sort((a, b) => a.displayName.localeCompare(b.displayName) || a.email.localeCompare(b.email)),
+      );
+      setNewUser({ email: '', displayName: '', role: 'user' });
+      toast.success(`Created ${created.displayName}`);
+    } catch (error: any) {
+      console.error('Failed to create user', error);
+      toast.error(error?.message || 'Failed to create user');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-hidden bg-white">
       <div className="h-16 bg-white border-b border-border-theme flex items-center justify-between px-6 shrink-0">
@@ -129,6 +153,43 @@ export function UserManagement() {
       </div>
 
       <div className="p-6 overflow-auto h-[calc(100vh-4rem)]">
+        <form onSubmit={handleCreateUser} className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-border-theme bg-slate-50 p-4">
+          <div className="min-w-[240px] flex-1">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-text-light">Email</div>
+            <Input
+              type="email"
+              value={newUser.email}
+              onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))}
+              placeholder="new.user@example.com"
+              required
+            />
+          </div>
+          <div className="min-w-[220px] flex-1">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-text-light">Name</div>
+            <Input
+              value={newUser.displayName}
+              onChange={(event) => setNewUser((current) => ({ ...current, displayName: event.target.value }))}
+              placeholder="Display name"
+            />
+          </div>
+          <div className="w-[160px]">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-text-light">Role</div>
+            <Select value={newUser.role} onValueChange={(value: UserProfile['role']) => setNewUser((current) => ({ ...current, role: value }))}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="agent">Agent</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" disabled={creatingUser}>
+            {creatingUser ? 'Creating...' : 'Create User'}
+          </Button>
+        </form>
+
         {loading ? (
           <div className="p-8 text-center text-text-light animate-pulse font-mono text-xs">
             LOADING USERS...

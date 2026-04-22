@@ -91,6 +91,13 @@ export async function listUsers() {
   return request<UserProfile[]>('/api/users');
 }
 
+export async function createUser(user: Pick<UserProfile, 'email' | 'displayName' | 'role'>) {
+  return request<UserProfile>('/api/users', {
+    method: 'POST',
+    body: JSON.stringify(user),
+  });
+}
+
 export async function updateUser(id: string, updates: Partial<Pick<UserProfile, 'displayName' | 'role' | 'photoURL'>>) {
   return request<UserProfile>(`/api/users/${id}`, {
     method: 'PATCH',

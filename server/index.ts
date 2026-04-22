@@ -250,6 +250,25 @@ app.get('/api/users', requireAdmin, async (_req, res, next) => {
   }
 });
 
+app.post('/api/users', requireAdmin, async (req, res, next) => {
+  try {
+    const role = req.body.role;
+    if (role && !['admin', 'agent', 'user'].includes(role)) {
+      res.status(400).json({ error: 'Invalid role' });
+      return;
+    }
+
+    const user = await store.createUser({
+      email: req.body.email,
+      displayName: req.body.displayName,
+      role,
+    });
+    res.status(201).json(user);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.patch('/api/users/:id', requireAdmin, async (req, res, next) => {
   try {
     const role = req.body.role;
