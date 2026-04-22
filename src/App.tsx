@@ -15,7 +15,9 @@ import {
   Loader2,
   MailPlus,
   User as UserIcon,
-  History
+  History,
+  Trash2,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -27,6 +29,74 @@ import { createTicket, deleteTicket, importEmailPreview, updateTicket } from './
 
 type DeadlineFilter = 'all' | 'overdue' | 'today' | 'this_week' | 'none';
 type TicketSort = 'changed_desc' | 'created_desc' | 'priority_desc' | 'deadline_asc';
+
+function getStatusClass(status: TicketStatus) {
+  switch (status) {
+    case 'new':
+      return 'status-new';
+    case 'open':
+      return 'status-open';
+    case 'in_progress':
+      return 'status-progress';
+    case 'waiting':
+      return 'status-waiting';
+    case 'resolved':
+      return 'status-resolved';
+    case 'closed':
+      return 'status-closed';
+    default:
+      return 'status-open';
+  }
+}
+
+function getStatusLabel(status: TicketStatus) {
+  switch (status) {
+    case 'new':
+      return 'New';
+    case 'open':
+      return 'Open';
+    case 'in_progress':
+      return 'In Progress';
+    case 'waiting':
+      return 'Waiting';
+    case 'resolved':
+      return 'Resolved';
+    case 'closed':
+      return 'Closed';
+    default:
+      return status;
+  }
+}
+
+function getPriorityClass(priority: TicketPriority) {
+  switch (priority) {
+    case 'low':
+      return 'priority-low';
+    case 'medium':
+      return 'priority-medium';
+    case 'high':
+      return 'priority-high';
+    case 'critical':
+      return 'priority-critical';
+    default:
+      return 'priority-medium';
+  }
+}
+
+function getPriorityLabel(priority: TicketPriority) {
+  switch (priority) {
+    case 'low':
+      return 'Low';
+    case 'medium':
+      return 'Medium';
+    case 'high':
+      return 'High';
+    case 'critical':
+      return 'Critical';
+    default:
+      return priority;
+  }
+}
 
 function startOfToday() {
   const today = new Date();
@@ -51,7 +121,7 @@ function endOfThisWeek() {
 
 function getDeadlineState(ticket: Ticket) {
   const deadline = ticket.deadline?.toDate ? ticket.deadline.toDate() : null;
-  if (!deadline) return { kind: 'none' as const, label: 'No deadline', classes: 'border-slate-200 bg-slate-50 text-slate-500' };
+  if (!deadline) return { kind: 'none' as const, label: 'No due date', classes: 'border-slate-200 bg-slate-50 text-slate-500' };
 
   const now = new Date();
   const todayStart = startOfToday();
@@ -59,16 +129,16 @@ function getDeadlineState(ticket: Ticket) {
   const weekEnd = endOfThisWeek();
 
   if (deadline < now) {
-    return { kind: 'overdue' as const, label: `Overdue ${format(deadline, 'MMM d, HH:mm')}`, classes: 'border-red-200 bg-red-50 text-red-700' };
+    return { kind: 'overdue' as const, label: `Overdue ${format(deadline, 'MMM d')}`, classes: 'border-red-200 bg-red-50 text-red-700' };
   }
   if (deadline >= todayStart && deadline < todayEnd) {
-    return { kind: 'today' as const, label: `Due today ${format(deadline, 'HH:mm')}`, classes: 'border-amber-200 bg-amber-50 text-amber-700' };
+    return { kind: 'today' as const, label: 'Due today', classes: 'border-amber-200 bg-amber-50 text-amber-700' };
   }
   if (deadline >= todayStart && deadline < weekEnd) {
-    return { kind: 'week' as const, label: `This week ${format(deadline, 'EEE HH:mm')}`, classes: 'border-sky-200 bg-sky-50 text-sky-700' };
+    return { kind: 'week' as const, label: `This week ${format(deadline, 'EEE')}`, classes: 'border-sky-200 bg-sky-50 text-sky-700' };
   }
 
-  return { kind: 'scheduled' as const, label: format(deadline, 'MMM d, HH:mm'), classes: 'border-slate-200 bg-slate-50 text-slate-600' };
+  return { kind: 'scheduled' as const, label: format(deadline, 'MMM d'), classes: 'border-slate-200 bg-slate-50 text-slate-600' };
 }
 
 export default function App() {
@@ -161,7 +231,6 @@ export default function App() {
     return filtered;
   }, [deadlineFilter, priorityFilter, ticketSort, tickets, unassignedOnly, waitingOnly]);
 
-  const allVisibleSelected = filteredTickets.length > 0 && filteredTickets.every((ticket) => selectedTicketIds.includes(ticket.id));
   const bulkMode = selectedTicketIds.length > 0;
 
   if (authLoading) {
@@ -270,17 +339,6 @@ export default function App() {
     );
   };
 
-  const toggleSelectAllVisible = () => {
-    setSelectedTicketIds((current) => {
-      if (allVisibleSelected) {
-        return current.filter((id) => !filteredTickets.some((ticket) => ticket.id === id));
-      }
-      const next = new Set(current);
-      for (const ticket of filteredTickets) next.add(ticket.id);
-      return Array.from(next);
-    });
-  };
-
   const handleTicketDeleted = (ticketId: string) => {
     setSelectedTicketIds((current) => current.filter((id) => id !== ticketId));
     if (selectedTicket?.id === ticketId) {
@@ -348,6 +406,18 @@ export default function App() {
           </div>
         </div>
 
+        <div className="px-6 mb-5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/35" />
+            <Input
+              placeholder="Search tickets..."
+              className="h-9 border-white/10 bg-white/5 pl-9 text-sm text-white placeholder:text-white/35 focus-visible:border-white/20 focus-visible:ring-white/10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
         <nav className="flex-1 space-y-1">
           {[
             {
@@ -403,27 +473,12 @@ export default function App() {
           <UserManagement />
         ) : (
           <>
-        <header className="h-16 bg-white border-b border-border-theme flex items-center justify-between px-6 shrink-0">
-          <div className="relative w-[300px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-light" />
-            <Input 
-              placeholder="Search tickets, descriptions, or updates..." 
-              className="pl-9 bg-[#f1f5f9] border-border-theme h-9 text-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <CreateTicketDialog />
-          </div>
-        </header>
-
         <div className="flex-1 flex overflow-hidden">
           {/* Ticket List */}
           <aside className="w-[360px] bg-white border-r border-border-theme flex flex-col min-h-0 shrink-0">
             <div
-              className={`border-b border-border-theme px-4 py-3 transition-colors ${
-                creatingFromMail ? 'bg-slate-50' : 'bg-white'
+              className={`px-4 py-4 transition-colors ${
+                creatingFromMail ? 'bg-slate-50/70' : 'bg-white'
               }`}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
@@ -432,91 +487,58 @@ export default function App() {
                 if (files.length > 0) handleInboxImport(files);
               }}
             >
-              <button
-                type="button"
-                className={`flex w-full items-center gap-3 rounded-lg border border-dashed px-3 py-3 text-left transition-colors ${
-                  creatingFromMail
-                    ? 'border-slate-300 bg-slate-50'
-                    : 'border-border-theme bg-[#f8fafc] hover:border-primary/50 hover:bg-slate-50'
-                }`}
-                onClick={() => {
-                  if (creatingFromMail) return;
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = '.msg';
-                  input.onchange = (e) => {
-                    const files = Array.from((e.target as HTMLInputElement).files || []);
-                    if (files.length > 0) handleInboxImport(files);
-                  };
-                  input.click();
-                }}
-              >
-                {creatingFromMail ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-                ) : (
-                  <MailPlus className="h-4 w-4 shrink-0 text-primary" />
-                )}
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-text-dark">New from email</div>
-                  <div className="text-[11px] text-text-light">Drop an Outlook mail here to create a ticket straight from the list.</div>
+              <div className="rounded-lg bg-[#f8fafc] p-4">
+                <div>
+                  <CreateTicketDialog triggerClassName="h-9 w-full justify-center shadow-none" triggerLabel="New Ticket" />
                 </div>
-              </button>
+                <div className="my-3" />
+                <button
+                  type="button"
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                    creatingFromMail
+                      ? 'bg-white/80 ring-1 ring-slate-200'
+                      : 'bg-white/70 hover:bg-white'
+                  }`}
+                  onClick={() => {
+                    if (creatingFromMail) return;
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.msg';
+                    input.onchange = (e) => {
+                      const files = Array.from((e.target as HTMLInputElement).files || []);
+                      if (files.length > 0) handleInboxImport(files);
+                    };
+                    input.click();
+                  }}
+                >
+                  {creatingFromMail ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                  ) : (
+                    <MailPlus className="h-4 w-4 shrink-0 text-primary" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-text-dark">Create From Email</div>
+                    <div className="text-[11px] text-text-light">Drop an Outlook mail here to create a ticket from the message.</div>
+                  </div>
+                </button>
+              </div>
             </div>
             <div className="border-b border-border-theme bg-white/50">
-              <div className="p-4 flex items-center justify-between">
-              <span className="font-bold text-sm">Tickets ({filteredTickets.length})</span>
-              <div className="flex items-center gap-2">
-                <select
-                  value={ticketSort}
-                  onChange={(e) => setTicketSort(e.target.value as TicketSort)}
-                  className="h-8 rounded-md border border-border-theme bg-white px-2 text-[11px] text-text-dark"
-                >
-                  <option value="changed_desc">Changed</option>
-                  <option value="created_desc">Created</option>
-                  <option value="priority_desc">Priority</option>
-                  <option value="deadline_asc">Deadline</option>
-                </select>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-8 w-8 ${showListFilters || hasActiveListFilters ? 'bg-slate-100 text-text-dark' : ''}`}
-                  onClick={() => setShowListFilters((current) => !current)}
-                >
-                  <Filter className="h-4 w-4 text-text-light" />
-                </Button>
-              </div>
-              </div>
-              {bulkMode && (
-                <div className="border-t border-border-theme px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="flex items-center gap-2 text-[11px] text-text-dark">
-                      <input
-                        type="checkbox"
-                        checked={allVisibleSelected}
-                        onChange={toggleSelectAllVisible}
-                        className="h-4 w-4"
-                      />
-                      Select all visible
-                    </label>
-                    <button
-                      type="button"
-                      className="text-[11px] font-medium text-text-light hover:text-text-dark"
-                      onClick={() => {
-                        setSelectedTicketIds([]);
-                      }}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
-                    <span className="text-[11px] font-medium text-text-dark">
+              <div className="flex items-center justify-between gap-3 p-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="shrink-0 font-bold text-sm">Tickets ({filteredTickets.length})</span>
+                  {bulkMode && (
+                    <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary">
                       {selectedTicketIds.length} selected
                     </span>
-                    <div className="flex items-center gap-2">
+                  )}
+                </div>
+                {bulkMode ? (
+                  <div className="flex shrink-0 items-center gap-2">
                     <select
                       value={bulkStatus}
                       onChange={(e) => handleBulkStatusChange(e.target.value as TicketStatus)}
-                      className="h-8 rounded-md border border-border-theme bg-white px-2 text-[11px]"
+                      className="h-8 min-w-[92px] rounded-md border border-border-theme bg-white px-2 text-[11px]"
                       disabled={selectedTicketIds.length === 0 || bulkUpdatingStatus}
                     >
                       <option value="new">New</option>
@@ -532,16 +554,50 @@ export default function App() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-8 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 disabled:border-border-theme disabled:text-text-light"
                       disabled={selectedTicketIds.length === 0 || bulkDeleting}
                       onClick={handleDeleteSelected}
+                      title="Delete selected tickets"
                     >
-                      {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
+                      {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-text-light hover:text-text-dark"
+                      onClick={() => {
+                        setSelectedTicketIds([]);
+                      }}
+                      title="Exit selection"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={ticketSort}
+                      onChange={(e) => setTicketSort(e.target.value as TicketSort)}
+                      className="h-8 min-w-[88px] rounded-md border border-border-theme bg-white px-2 text-[11px] text-text-dark"
+                    >
+                      <option value="changed_desc">Changed</option>
+                      <option value="created_desc">Created</option>
+                      <option value="priority_desc">Priority</option>
+                      <option value="deadline_asc">Due date</option>
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={`h-8 w-8 border-border-theme bg-white ${showListFilters || hasActiveListFilters ? 'bg-slate-100 text-text-dark' : 'text-text-light'}`}
+                      onClick={() => setShowListFilters((current) => !current)}
+                    >
+                      <Filter className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
               {showListFilters && (
                 <div className="border-t border-border-theme px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
@@ -581,14 +637,14 @@ export default function App() {
                     </div>
                   </div>
                   <div className="mt-3">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-light">Deadline</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-text-light">Due Date</div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {([
-                        ['all', 'Any deadline'],
+                        ['all', 'Any due date'],
                         ['overdue', 'Overdue'],
                         ['today', 'Due today'],
                         ['this_week', 'Due this week'],
-                        ['none', 'No deadline'],
+                        ['none', 'No due date'],
                       ] as const).map(([value, label]) => (
                         <button
                           key={value}
@@ -681,7 +737,11 @@ export default function App() {
                       <h3 className="font-semibold text-sm mb-2 line-clamp-1">
                         {ticket.title}
                       </h3>
-                      <div className="mb-2 flex items-center gap-2">
+                      <div className="mb-2 flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${getPriorityClass(ticket.priority)}`}>
+                          <span className="h-2 w-2 rounded-full bg-current" />
+                          <span>{getPriorityLabel(ticket.priority)}</span>
+                        </span>
                         {deadlineState.kind !== 'none' && (
                           <Badge variant="outline" className={`text-[10px] ${deadlineState.classes}`}>
                             {deadlineState.label}
@@ -692,11 +752,8 @@ export default function App() {
                         )}
                       </div>
                       <div className="flex items-center justify-between">
-                        <Badge variant="outline" className={`status-pill ${
-                          ticket.priority === 'critical' || ticket.priority === 'high' ? 'status-urgent' : 
-                          ticket.status === 'new' ? 'status-new' : 'status-active'
-                        }`}>
-                          {ticket.status.replace('_', ' ')}
+                        <Badge variant="outline" className={`status-pill ${getStatusClass(ticket.status)}`}>
+                          {getStatusLabel(ticket.status)}
                         </Badge>
                         <span className="text-[10px] text-text-light">
                           {ticket.updatedAt?.toDate ? `Changed ${format(ticket.updatedAt.toDate(), 'MMM d')}` : ticket.requesterName}

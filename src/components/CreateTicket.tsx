@@ -26,7 +26,15 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
-export function CreateTicketDialog() {
+interface CreateTicketDialogProps {
+  triggerClassName?: string;
+  triggerLabel?: string;
+}
+
+export function CreateTicketDialog({
+  triggerClassName,
+  triggerLabel = 'New Ticket',
+}: CreateTicketDialogProps = {}) {
   const { profile } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -176,9 +184,9 @@ export function CreateTicketDialog() {
     >
       <DialogTrigger
         render={(
-          <Button className="gap-2">
+          <Button className={`gap-2 ${triggerClassName || ''}`.trim()}>
             <Plus className="w-4 h-4" />
-            New Ticket
+            {triggerLabel}
           </Button>
         )}
       />
