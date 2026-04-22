@@ -1,30 +1,49 @@
-# Handl
+# ![Handl](public/handl-mark.svg) Handl
 
-Handl is a standalone, self-hosted ticketing app. It no longer depends on Firebase for auth, Firestore, or Storage.
+**Handle support without the overhead**
 
-## Run With Docker
+Handl is a self-hosted ticket and work-log app for managing incoming requests, follow-up updates, attachments, and email-driven work in one place. It is designed for a lightweight helpdesk-style workflow without needing a full external platform.
 
-SQLite is the default database and stores data in the `taskflow-data` Docker volume:
+## What Handl Does
+
+- Create and manage tickets with status, priority, requester, assignee, and due date
+- Add manual updates and keep a searchable activity log
+- Import Outlook `.msg` emails into tickets
+- Create new tickets directly from imported email
+- Upload and preview attachments, including images and text-based files
+- Run with SQLite by default, or Postgres if you prefer
+- Deploy as a standalone Docker container or from a published GitHub Container Registry image
+
+## Requirements
+
+- Docker and Docker Compose for container-based use
+- Node.js 20+ and npm if you want to run it locally without Docker
+
+## Quick Start With Docker
+
+SQLite is the default database. In the provided compose setup, application data is persisted in the named Docker volume mounted at `/app/data`.
 
 ```bash
 docker compose up --build
 ```
 
-Open http://localhost:3000 and sign in with your email address. Set `ADMIN_EMAILS` in `docker-compose.yml` to the comma-separated emails that should receive the `admin` role.
+Then open http://localhost:3000
 
-Uploaded files are stored under `/app/data/uploads` in the same Docker volume as the SQLite database.
+Sign in with a provisioned account. Set `ADMIN_EMAILS` in [docker-compose.yml](docker-compose.yml) to the comma-separated email addresses that should have the `admin` role on startup.
 
-## Use Postgres
+Uploaded files are stored under `/app/data/uploads`.
 
-Uncomment `DATABASE_URL` and the `db` service in `docker-compose.yml`, then run:
+## Use Postgres Instead Of SQLite
+
+Handl works with Postgres as well. Uncomment `DATABASE_URL` and the `db` service in [docker-compose.yml](docker-compose.yml), then start the stack:
 
 ```bash
 docker compose up --build
 ```
 
-When `DATABASE_URL` is set, Handl creates and uses the same schema in Postgres instead of SQLite.
+When `DATABASE_URL` is set, Handl uses Postgres for application data instead of SQLite.
 
-## Deploy From GitHub To A Docker Host
+## Deploy To A Docker Host From GitHub
 
 This repo includes a GitHub Actions workflow that publishes a Docker image to GitHub Container Registry:
 
@@ -32,26 +51,26 @@ This repo includes a GitHub Actions workflow that publishes a Docker image to Gi
 ghcr.io/<github-owner>/<repo-name>:latest
 ```
 
-On your dev box:
+On your development machine:
 
 ```bash
 git add .
-git commit -m "Make Handl standalone"
+git commit -m "Deploy Handl"
 git branch -M main
 git remote add origin https://github.com/<github-owner>/<repo-name>.git
 git push -u origin main
 ```
 
-After the push, open the repository on GitHub and check **Actions**. The `Publish Docker Image` workflow should build and publish the image.
+After the push, open your repository on GitHub and check the **Actions** tab. The `Publish Docker Image` workflow should build and publish the image.
 
-On your Docker host, create a stack folder with only a compose file:
+On your Docker host, create a stack folder:
 
 ```bash
-mkdir -p /opt/stacks/taskflow
-cd /opt/stacks/taskflow
+mkdir -p /opt/stacks/handl
+cd /opt/stacks/handl
 ```
 
-Copy `compose.stack.yml` into that folder, rename it to `docker-compose.yml`, and change:
+Copy [compose.stack.yml](compose.stack.yml) into that folder, rename it to `docker-compose.yml`, and update at least:
 
 ```yaml
 image: ghcr.io/YOUR_GITHUB_OWNER/YOUR_REPO_NAME:latest
@@ -72,28 +91,67 @@ docker compose pull
 docker compose up -d
 ```
 
-The host does not need the source code when using `compose.stack.yml`; it only pulls the published image.
+The Docker host only needs the compose file when you deploy from a published image.
 
 ## Run Locally Without Docker
 
+Install dependencies:
+
 ```bash
 npm install
-python -m pip install extract-msg beautifulsoup4
+```
+
+Build and run the production server:
+
+```bash
 npm run build
 npm start
 ```
 
-For development, run the API and Vite in separate terminals:
+For development, run the API server and Vite separately in two terminals:
 
 ```bash
 npm run dev:server
 npm run dev
 ```
 
-Then open http://localhost:5173. Vite proxies `/api` and `/uploads` to the API server on port 3000.
+Then open http://localhost:5173
+
+Vite proxies `/api` and `/uploads` to the API server on port 3000.
 
 If the frontend runs on Vite and the API runs elsewhere, set `VITE_API_BASE_URL`, for example:
 
 ```bash
 VITE_API_BASE_URL=http://localhost:3000 npm run dev
 ```
+
+## Configuration
+
+See [.env.example](.env.example) for the available environment variables.
+
+Most important settings:
+
+- `PORT`: HTTP port for the app server
+- `DATA_DIR`: data directory for SQLite and uploaded files
+- `ADMIN_EMAILS`: comma-separated bootstrap admin accounts
+- `DATABASE_URL`: Postgres connection string, optional
+- `MAX_UPLOAD_BYTES`: upload size limit in bytes
+
+## Data Storage
+
+With SQLite:
+
+- database file: `DATA_DIR/handl.sqlite` for new installs
+- legacy installs using `DATA_DIR/taskflow.sqlite` are still supported automatically
+- uploads: `DATA_DIR/uploads`
+
+With Postgres:
+
+- application data lives in Postgres
+- uploads still live in `DATA_DIR/uploads`
+
+## Notes
+
+- Handl is intended to be self-hosted
+- Reverse-proxy auth in front of the app is supported well as an outer security layer
+- Browsers may cache the favicon aggressively after branding changes; a hard refresh usually fixes that
