@@ -38,6 +38,15 @@ export interface UpdateCommentInput {
   isInternal?: boolean;
 }
 
+export interface ApiTokenRecord {
+  id: string;
+  userId: string;
+  name: string;
+  tokenPrefix: string;
+  createdAt: string;
+  lastUsedAt?: string | null;
+}
+
 type SqliteDatabase = import('better-sqlite3').Database;
 type PgPool = import('pg').Pool;
 
@@ -139,6 +148,16 @@ export class Store {
           email_sent_at TIMESTAMPTZ
         );
 
+        CREATE TABLE IF NOT EXISTS api_tokens (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          token_hash TEXT UNIQUE NOT NULL,
+          token_prefix TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          last_used_at TIMESTAMPTZ
+        );
+
         ALTER TABLE comments ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'manual';
         ALTER TABLE comments ADD COLUMN IF NOT EXISTS source_file_name TEXT;
         ALTER TABLE comments ADD COLUMN IF NOT EXISTS email_subject TEXT;
@@ -193,6 +212,17 @@ export class Store {
         email_sent_at TEXT,
         FOREIGN KEY(ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS api_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        token_hash TEXT UNIQUE NOT NULL,
+        token_prefix TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(uid) ON DELETE CASCADE
+      );
     `);
 
     this.ensureSqliteColumn('comments', 'source_type', "TEXT NOT NULL DEFAULT 'manual'");
@@ -202,6 +232,92 @@ export class Store {
     this.ensureSqliteColumn('comments', 'email_sent_at', 'TEXT');
     this.ensureSqliteColumn('tickets', 'created_by_id', 'TEXT');
     this.ensureSqliteColumn('tickets', 'created_by_name', 'TEXT');
+  }
+
+  async listApiTokens(userId: string): Promise<ApiTokenRecord[]> {
+    const rows = this.pg
+      ? (await this.pg.query(
+        `SELECT id, user_id AS "userId", name, token_prefix AS "tokenPrefix",
+                created_at AS "createdAt", last_used_at AS "lastUsedAt"
+           FROM api_tokens
+          WHERE user_id = $1
+          ORDER BY created_at DESC`,
+        [userId],
+      )).rows
+      : this.sqlite!.prepare(
+        `SELECT id, user_id AS userId, name, token_prefix AS tokenPrefix,
+                created_at AS createdAt, last_used_at AS lastUsedAt
+           FROM api_tokens
+          WHERE user_id = ?
+          ORDER BY created_at DESC`,
+      ).all(userId);
+    return rows as ApiTokenRecord[];
+  }
+
+  async createApiToken(input: { userId: string; name: string; tokenHash: string; tokenPrefix: string }): Promise<ApiTokenRecord> {
+    const id = nanoid(16);
+    const timestamp = now();
+    const name = input.name.trim() || 'API token';
+
+    if (this.pg) {
+      await this.pg.query(
+        `INSERT INTO api_tokens (id, user_id, name, token_hash, token_prefix, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, input.userId, name, input.tokenHash, input.tokenPrefix, timestamp],
+      );
+    } else {
+      this.sqlite!.prepare(
+        `INSERT INTO api_tokens (id, user_id, name, token_hash, token_prefix, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(id, input.userId, name, input.tokenHash, input.tokenPrefix, timestamp);
+    }
+
+    return {
+      id,
+      userId: input.userId,
+      name,
+      tokenPrefix: input.tokenPrefix,
+      createdAt: timestamp,
+      lastUsedAt: null,
+    };
+  }
+
+  async deleteApiToken(userId: string, tokenId: string): Promise<boolean> {
+    if (this.pg) {
+      const result = await this.pg.query('DELETE FROM api_tokens WHERE id = $1 AND user_id = $2', [tokenId, userId]);
+      return (result.rowCount ?? 0) > 0;
+    }
+
+    const result = this.sqlite!.prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').run(tokenId, userId);
+    return result.changes > 0;
+  }
+
+  async getUserByApiTokenHash(tokenHash: string): Promise<UserProfile | null> {
+    const timestamp = now();
+    const row = this.pg
+      ? (await this.pg.query(
+        `SELECT u.uid, u.email, u.display_name AS "displayName", u.photo_url AS "photoURL", u.role
+           FROM api_tokens t
+           JOIN users u ON u.uid = t.user_id
+          WHERE t.token_hash = $1`,
+        [tokenHash],
+      )).rows[0]
+      : this.sqlite!.prepare(
+        `SELECT u.uid, u.email, u.display_name AS displayName, u.photo_url AS photoURL, u.role
+           FROM api_tokens t
+           JOIN users u ON u.uid = t.user_id
+          WHERE t.token_hash = ?`,
+      ).get(tokenHash);
+
+    if (!row) return null;
+
+    if (this.pg) {
+      await this.pg.query('UPDATE api_tokens SET last_used_at = $1 WHERE token_hash = $2', [timestamp, tokenHash]);
+    } else {
+      this.sqlite!.prepare('UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ?').run(timestamp, tokenHash);
+    }
+
+    return row as UserProfile;
   }
 
   async getOrCreateUser(email: string, displayName?: string): Promise<UserProfile> {

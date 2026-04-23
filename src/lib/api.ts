@@ -12,6 +12,19 @@ export interface LocalUser {
   photoURL: string;
 }
 
+export interface ApiToken {
+  id: string;
+  userId: string;
+  name: string;
+  tokenPrefix: string;
+  createdAt: string;
+  lastUsedAt?: string | null;
+}
+
+export interface CreatedApiToken extends ApiToken {
+  token: string;
+}
+
 function timestamp(value: unknown) {
   if (!value) return value;
   const date = new Date(String(value));
@@ -114,6 +127,23 @@ export async function updateUser(id: string, updates: Partial<Pick<UserProfile, 
 
 export async function deleteUser(id: string) {
   return request<void>(`/api/users/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listApiTokens() {
+  return request<ApiToken[]>('/api/api-tokens');
+}
+
+export async function createApiToken(name: string) {
+  return request<CreatedApiToken>('/api/api-tokens', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteApiToken(id: string) {
+  return request<void>(`/api/api-tokens/${id}`, {
     method: 'DELETE',
   });
 }

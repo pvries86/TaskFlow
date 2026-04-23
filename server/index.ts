@@ -3,6 +3,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import multer from 'multer';
 import { fileURLToPath } from 'node:url';
 import MsgReader from '@kenjiuno/msgreader';
@@ -38,7 +39,26 @@ const upload = multer({
 app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(uploadsDir));
 
+function hashApiToken(token: string) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function createApiTokenSecret() {
+  return `hdl_${crypto.randomBytes(32).toString('base64url')}`;
+}
+
+function getBearerToken(req: express.Request) {
+  const authorization = String(req.header('authorization') || '');
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || '';
+}
+
 async function getRequestUser(req: express.Request) {
+  const apiToken = getBearerToken(req) || String(req.header('x-api-key') || '');
+  if (apiToken) {
+    return store.getUserByApiTokenHash(hashApiToken(apiToken));
+  }
+
   const uid = String(req.header('x-user-id') || '');
   return uid ? store.getUser(uid) : null;
 }
@@ -218,15 +238,14 @@ app.post('/api/auth/login', async (req, res, next) => {
 
 app.get('/api/auth/me', async (req, res, next) => {
   try {
-    const uid = String(req.header('x-user-id') || '');
-    const user = uid ? await store.getUser(uid) : null;
+    const user = await getRequestUser(req);
     res.json({ user });
   } catch (error) {
     next(error);
   }
 });
 
-app.get('/api/users/agents', async (_req, res, next) => {
+app.get('/api/users/agents', requireUser, async (_req, res, next) => {
   try {
     res.json(await store.listAgents());
   } catch (error) {
@@ -234,9 +253,48 @@ app.get('/api/users/agents', async (_req, res, next) => {
   }
 });
 
-app.get('/api/requesters', async (_req, res, next) => {
+app.get('/api/requesters', requireUser, async (_req, res, next) => {
   try {
     res.json(await store.listRequesters());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/api-tokens', requireUser, async (_req, res, next) => {
+  try {
+    res.json(await store.listApiTokens(res.locals.user.uid));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/api-tokens', requireUser, async (req, res, next) => {
+  try {
+    const token = createApiTokenSecret();
+    const tokenRecord = await store.createApiToken({
+      userId: res.locals.user.uid,
+      name: String(req.body.name || 'API token'),
+      tokenHash: hashApiToken(token),
+      tokenPrefix: token.slice(0, 12),
+    });
+    res.status(201).json({
+      ...tokenRecord,
+      token,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/api-tokens/:id', requireUser, async (req, res, next) => {
+  try {
+    const deleted = await store.deleteApiToken(res.locals.user.uid, req.params.id);
+    if (!deleted) {
+      res.status(404).json({ error: 'API token not found' });
+      return;
+    }
+    res.status(204).end();
   } catch (error) {
     next(error);
   }
@@ -333,6 +391,17 @@ app.get('/api/tickets', requireUser, async (req, res, next) => {
       res.locals.user,
     );
     res.json(tickets);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/tickets/:id', requireUser, async (req, res, next) => {
+  try {
+    const access = await requireTicketAccess(req, res, req.params.id);
+    if (!access) return;
+    const comments = await store.listComments(req.params.id);
+    res.json({ ticket: access.ticket, comments });
   } catch (error) {
     next(error);
   }

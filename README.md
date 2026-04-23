@@ -137,6 +137,16 @@ Most important settings:
 - `DATABASE_URL`: Postgres connection string, optional
 - `MAX_UPLOAD_BYTES`: upload size limit in bytes
 
+## API Integrations
+
+Handl exposes a JSON API that can be used from Postman, scripts, automation tools, or other integrations. For automation, create an API token and send it as:
+
+```text
+Authorization: Bearer hdl_your_token
+```
+
+See [docs/api.md](docs/api.md) for endpoints, token management, and integration examples.
+
 ## Data Storage
 
 With SQLite:
